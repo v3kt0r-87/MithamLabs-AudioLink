@@ -918,8 +918,11 @@ kbd {
 
 <!-- Native audio element for WebRTC playback & Echo Cancellation (AEC) reference -->
 <audio id="remote-audio" autoplay playsinline></audio>
-<!-- Custom ringtone audio element -->
+<!-- Sound effect audio elements -->
 <audio id="ring-audio" src="call_ring.mp3" preload="auto" loop></audio>
+<audio id="dial-audio" src="call_dail.mp3" preload="auto" loop></audio>
+<audio id="connected-audio" src="call_connected.mp3" preload="auto"></audio>
+<audio id="ended-audio" src="call_ended.mp3" preload="auto"></audio>
 
 <script>
 /* =========================================================================
@@ -1009,28 +1012,38 @@ function unlockAudioContext() {
         if (ctx && ctx.state === 'suspended') {
             ctx.resume().catch(() => {});
         }
-        const ringAudio = document.getElementById('ring-audio');
-        if (ringAudio && !ringAudio.dataset.unlocked) {
-            const p = ringAudio.play();
-            if (p !== undefined) {
-                p.then(() => {
-                    ringAudio.pause();
-                    ringAudio.currentTime = 0;
-                    ringAudio.dataset.unlocked = "true";
-                }).catch(() => {});
+        ['ring-audio', 'dial-audio', 'connected-audio', 'ended-audio'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el && !el.dataset.unlocked) {
+                el.dataset.unlocked = "true";
+                const p = el.play();
+                if (p !== undefined) {
+                    p.then(() => {
+                        if (!el.dataset.playing) {
+                            el.pause();
+                            el.currentTime = 0;
+                        }
+                    }).catch(() => {
+                        delete el.dataset.unlocked;
+                    });
+                }
             }
-        }
+        });
     } catch(e) {}
 }
 
 function startRingTone(isIncoming = true) {
     stopRingTone();
-    const ringAudio = document.getElementById('ring-audio');
-    if (ringAudio && isIncoming) {
-        ringAudio.currentTime = 0;
-        const playPromise = ringAudio.play();
+    const el = document.getElementById(isIncoming ? 'ring-audio' : 'dial-audio');
+    if (el) {
+        el.dataset.playing = "true";
+        el.currentTime = 0;
+        const playPromise = el.play();
         if (playPromise !== undefined) {
-            playPromise.catch(() => playSynthRingTone(true));
+            playPromise.catch(() => {
+                delete el.dataset.playing;
+                playSynthRingTone(isIncoming);
+            });
         }
         return;
     }
@@ -1038,11 +1051,14 @@ function startRingTone(isIncoming = true) {
 }
 
 function stopRingTone() {
-    const ringAudio = document.getElementById('ring-audio');
-    if (ringAudio) {
-        ringAudio.pause();
-        ringAudio.currentTime = 0;
-    }
+    ['ring-audio', 'dial-audio'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            delete el.dataset.playing;
+            el.pause();
+            el.currentTime = 0;
+        }
+    });
     if (state.ringInterval) {
         clearInterval(state.ringInterval);
         state.ringInterval = null;
@@ -1080,6 +1096,19 @@ function playSynthRingTone(isIncoming = true) {
 }
 
 function playConnectChime() {
+    const el = document.getElementById('connected-audio');
+    if (el) {
+        el.currentTime = 0;
+        const playPromise = el.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(() => playSynthConnectChime());
+        }
+        return;
+    }
+    playSynthConnectChime();
+}
+
+function playSynthConnectChime() {
     try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
@@ -1098,6 +1127,19 @@ function playConnectChime() {
 }
 
 function playDisconnectTone() {
+    const el = document.getElementById('ended-audio');
+    if (el) {
+        el.currentTime = 0;
+        const playPromise = el.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(() => playSynthDisconnectTone());
+        }
+        return;
+    }
+    playSynthDisconnectTone();
+}
+
+function playSynthDisconnectTone() {
     try {
         const ctx = getAudioCtx();
         const now = ctx.currentTime;
@@ -1412,8 +1454,9 @@ function cancelOutgoingCallUI() {
     document.getElementById('btn-start-call').disabled = false;
     stopRingTone();
     if (state.currentCall) {
-        state.currentCall.close();
+        const call = state.currentCall;
         state.currentCall = null;
+        call.close();
     }
     updateStatusBadge('Online', 'var(--brand)');
 }
@@ -1826,8 +1869,11 @@ function extractNetworkInfo(stats, hasRtt) {
    CLEANUP & TEARDOWN
    ========================================================================= */
 function endCall() {
+    playDisconnectTone();
     if (state.currentCall) {
-        state.currentCall.close();
+        const call = state.currentCall;
+        state.currentCall = null;
+        call.close();
     }
     cleanup();
 }
