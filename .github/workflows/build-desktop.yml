@@ -22,14 +22,11 @@ jobs:
           - os: ubuntu-latest
             artifact_name: AudioLink-Linux
             build_script: build:linux
-            artifact_paths: |
-              dist-electron/*.AppImage
-              dist-electron/*.deb
+            artifact_paths: dist-electron/*.AppImage
           - os: windows-latest
             artifact_name: AudioLink-Windows
             build_script: build:win
-            artifact_paths: |
-              dist-electron/*.exe
+            artifact_paths: dist-electron/*.exe
 
     steps:
       - name: Checkout repository
@@ -40,6 +37,12 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 || sudo apt-get install -y libfuse2t64
+
       - name: Install dependencies
         run: npm install
 
@@ -47,6 +50,7 @@ jobs:
         run: npm run ${{ matrix.build_script }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -72,7 +76,6 @@ jobs:
         with:
           files: |
             release-assets/*.AppImage
-            release-assets/*.deb
             release-assets/*.exe
           draft: false
           prerelease: false

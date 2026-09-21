@@ -3,7 +3,7 @@
 A lightweight, modern, low-resource peer-to-peer voice calling application built using WebRTC and PeerJS, designed for zero-latency communication during gaming sessions or when standard VOIP apps fail. Available both as an instant web app and as a standalone desktop app for Linux and Windows.
 
 - 🌐 **[Launch Web App](https://v3kt0r-87.github.io/WebRTC-P2PCall/)**
-- 🖥️ **Desktop Releases:** Download precompiled Linux (`.AppImage`, `.deb`) and Windows (`.exe`, portable) binaries from the [GitHub Releases](../../releases) page or Actions artifacts.
+- 🖥️ **Desktop Releases:** Download precompiled Linux (`.AppImage`) and Windows (`.exe`) binaries from the [GitHub Releases](../../releases) page or Actions artifacts.
 
 ## Features
 
@@ -34,7 +34,7 @@ A lightweight, modern, low-resource peer-to-peer voice calling application built
 
 AudioLink can be run as a standalone desktop app powered by Electron:
 - **Zero Local Toolchain Needed:** Binaries are automatically built in the cloud via GitHub Actions.
-- **Linux:** `.AppImage` (portable, runs anywhere) and `.deb` (Debian, Ubuntu, Mint).
+- **Linux:** `.AppImage` (standalone portable binary, runs on any Linux distribution).
 - **Windows:** NSIS Installer (`Setup.exe`) and Portable executable.
 - **Microphone Permissions:** Pre-authorized native audio pipeline with full hardware AEC and Noise Suppression.
 
