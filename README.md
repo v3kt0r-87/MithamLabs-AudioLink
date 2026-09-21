@@ -31,25 +31,6 @@ A lightweight, modern, low-resource browser-based peer-to-peer voice calling app
 
 ---
 
-## How to Use
-
-### 1. Online
-Open the live site at **[v3kt0r-87.github.io/WebRTC-P2PCall](https://v3kt0r-87.github.io/WebRTC-P2PCall/)**.
-
-### 2. Run Locally
-Because it is a self-contained static file, you can run it with any local static HTTP server (recommended for WebRTC microphone permissions):
-
-```bash
-# Using Python
-python3 -m http.server 8080
-
-# Or using Node / npx
-npx serve .
-```
-
-Then visit `http://localhost:8080`.
-
----
 
 ## Technologies
 
