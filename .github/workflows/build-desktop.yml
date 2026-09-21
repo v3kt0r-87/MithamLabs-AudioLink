@@ -73,20 +73,6 @@ jobs:
       - name: Inspect downloaded assets
         run: ls -la release-assets
 
-      - name: Remove unwanted installer assets from release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TARGET_TAG="${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.0' }}"
-          ASSET_ID=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TARGET_TAG" \
-            | jq -r '.assets[]? | select(.name | test("Setup.*exe")) | .id')
-          if [ -n "$ASSET_ID" ] && [ "$ASSET_ID" != "null" ]; then
-            echo "Removing installer asset: $ASSET_ID"
-            curl -s -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/assets/$ASSET_ID"
-          fi
-
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
