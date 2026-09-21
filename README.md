@@ -1,42 +1,66 @@
-# P2P Voice Call (WebRTC & PeerJS)
+# AudioLink — Zero Latency P2P Voice
 
-A lightweight, modern, low-resource browser-based peer-to-peer voice calling web application built using WebRTC and PeerJS, designed for zero-latency communication during gaming sessions or when standard VOIP apps fail.
+A lightweight, modern, low-resource browser-based peer-to-peer voice calling application built with WebRTC and PeerJS. Runs as a completely standalone, single-file web app with zero dependencies and no build step required.
 
-[View Live App](https://v3kt0r-87.github.io/WebRTC-P2PCall/)
+🌐 **[Launch Live App](https://v3kt0r-87.github.io/WebRTC-P2PCall/)**
 
-## Features
+---
 
-- **P2P Audio Communication:** Direct WebRTC browser-to-browser voice streaming with no intermediate audio servers.
-- **Dark & Light Themes:** Instant toggle between OLED Pure Black and Crisp Minimal Light themes with persistent preference storage.
-- **Ultra-Low Resource Footprint:** Zero continuous background canvas animations and zero heavy GPU blur filters for near-zero idle CPU, GPU, and RAM usage.
-- **Microphone Mute & Hotkeys:** Instant mic mute toggle with keyboard shortcut support (<kbd>M</kbd> to toggle mute, <kbd>Esc</kbd> to end/decline).
-- **Remote Speech Detection:** Subtle speaking indicator on your teammate's user card when they are speaking.
-- **Hardware Audio Processing:** Real-time toggles for Noise Suppression and Echo Cancellation via WebRTC track constraints.
-- **Call Management & Synthesized Ringtones:** Zero-latency Web Audio ringtones, connect chimes, and background desktop alerts.
-- **Screen Wake Lock:** Prevents mobile and laptop displays from dimming or sleeping during active voice sessions.
-- **One-Click Direct Invite Links:** Share direct invite links (`?call=USERNAME`) with automated setup and 1-click joining.
-- **Hardware Echo Cancellation & Volume Control:** Native WebRTC AEC3 hardware echo cancellation with built-in remote volume balance control.
-- **Live Telemetry & Diagnostics:** Real-time stats for average RTT latency, jitter, packet loss, connection integrity, network routing type, and IP resolution.
-- **Lightweight Audio Level Meter:** Efficient, low-frequency mic intensity bar with live dB input metering.
-- **Zero External Tracking:** No cookies, third-party analytics, or external asset dependencies.
-- **Session Persistence:** Remembers your chosen username via local storage.
+## Highlights
+
+- **Single-File Architecture:** The entire app lives inside [`index.html`](index.html). No Node.js, no bundlers, no build step.
+- **Direct Peer-to-Peer Audio:** Audio streams directly between browsers using WebRTC and the Opus codec—no intermediate audio servers or voice logging.
+- **Ultra-Low Resource Footprint:** Pure CSS transitions, no canvas animations or heavy GPU filters, engineered for near-zero idle CPU, GPU, and RAM overhead during gaming or multitasking.
+- **Hardware Audio Processing:** In-app toggles for native Echo Cancellation (AEC) and Noise Suppression.
+- **Synthesized Audio Alerts:** Zero-asset Web Audio API ringtones and chimes without loading external media files.
+- **Shareable Invite Links:** Generate direct invite links (`?call=USERNAME`) for quick 1-click calls.
+- **Live Connection Diagnostics:** Real-time round-trip latency (RTT), jitter, packet loss, and candidate connection details.
+- **OLED Dark & Porcelain Light Themes:** Instant toggle with persistent local preference.
+- **Screen Wake Lock:** Keeps screen active during voice calls on mobile and laptop displays.
+- **Privacy First:** No tracking, no cookies, no analytics.
+
+---
 
 ## Keyboard Shortcuts
 
 | Key | Action |
 | --- | --- |
 | <kbd>Enter</kbd> | Submit username / Initiate call |
-| <kbd>M</kbd> | Toggle Microphone Mute / Live |
-| <kbd>Esc</kbd> | Cancel outgoing call / Decline incoming / Terminate active call |
+| <kbd>M</kbd> | Toggle microphone mute |
+| <kbd>Esc</kbd> | Cancel outgoing call / Decline incoming / End active call |
 
-## Technologies Used
+---
 
-- **WebRTC** (Real-Time Communications, Opus Codec)
-- **PeerJS** (P2P Signaling with automatic reconnection watchdog)
-- **Web Audio API** (Unified audio graph processing, dynamic compression, sound cues)
-- **HTML5 & Vanilla CSS3** (Dual-theme modern interface, responsive 100dvh layout)
-- **Vanilla JavaScript** (Zero framework bloat, minimal CPU/memory footprint)
+## How to Use
+
+### 1. Online
+Open the live site at **[v3kt0r-87.github.io/WebRTC-P2PCall](https://v3kt0r-87.github.io/WebRTC-P2PCall/)**.
+
+### 2. Run Locally
+Because it is a self-contained static file, you can run it with any local static HTTP server (recommended for WebRTC microphone permissions):
+
+```bash
+# Using Python
+python3 -m http.server 8080
+
+# Or using Node / npx
+npx serve .
+```
+
+Then visit `http://localhost:8080`.
+
+---
+
+## Technologies
+
+- **WebRTC** — Real-time peer-to-peer audio streaming (Opus codec).
+- **PeerJS** — WebRTC signaling and peer discovery.
+- **Web Audio API** — Synthesized ringtones, call chimes, and live mic input metering.
+- **HTML5 & Vanilla CSS3** — Fully responsive dual-theme design (100dvh).
+- **Vanilla JavaScript** — Zero framework overhead, minimal memory footprint.
+
+---
 
 ## License
 
-This project is licensed under the GNU GPL v3 License.
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
