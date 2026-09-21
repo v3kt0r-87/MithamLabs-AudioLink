@@ -32,10 +32,7 @@
       "icon": "build/icon.png"
     },
     "win": {
-      "target": [
-        "nsis",
-        "portable"
-      ],
+      "target": "portable",
       "icon": "icon.ico"
     }
   },

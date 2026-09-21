@@ -35,7 +35,7 @@ A lightweight, modern, low-resource peer-to-peer voice calling application built
 AudioLink can be run as a standalone desktop app powered by Electron:
 - **Zero Local Toolchain Needed:** Binaries are automatically built in the cloud via GitHub Actions.
 - **Linux:** `.AppImage` (standalone portable binary, runs on any Linux distribution).
-- **Windows:** NSIS Installer (`Setup.exe`) and Portable executable.
+- **Windows:** Portable executable (`.exe`, runs anywhere with zero installation).
 - **Microphone Permissions:** Pre-authorized native audio pipeline with full hardware AEC and Noise Suppression.
 
 To build manually in your fork:
