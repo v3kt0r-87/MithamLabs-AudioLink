@@ -445,8 +445,7 @@ body {
 
 .modal-user {
     font-size: 20px;
-    font-weight: 800;
-    text-transform: uppercase;
+    font-weight: 700;
     letter-spacing: 0.5px;
     word-break: break-all;
 }
@@ -553,10 +552,9 @@ body {
 
 .user-name {
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 700;
     color: var(--text-primary);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
     width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -889,13 +887,13 @@ kbd {
             </div>
         </div>
 
-        <!-- REMOTE AUDIO GAIN -->
+        <!-- REMOTE AUDIO VOLUME -->
         <div class="gain-card">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span class="section-label" style="margin:0;">Remote Gain Multiplier</span>
-                <span id="gain-db-display" class="mono" style="font-size:11px; font-weight:700; color:var(--brand);">1.0x (0.0 dB)</span>
+                <span class="section-label" style="margin:0;">Remote Volume</span>
+                <span id="gain-db-display" class="mono" style="font-size:11px; font-weight:700; color:var(--brand);">100%</span>
             </div>
-            <input type="range" id="gain-slider" class="gain-slider" min="0" max="300" value="100">
+            <input type="range" id="gain-slider" class="gain-slider" min="0" max="100" value="100">
         </div>
 
         <!-- HARDWARE TOGGLE BUTTONS -->
@@ -918,8 +916,8 @@ kbd {
 
 </div>
 
-<!-- Hidden audio element for Chromium WebRTC Audio renderer -->
-<audio id="remote-audio" autoplay muted playsinline></audio>
+<!-- Native audio element for WebRTC playback & Echo Cancellation (AEC) reference -->
+<audio id="remote-audio" autoplay playsinline></audio>
 
 <script>
 /* =========================================================================
@@ -931,8 +929,6 @@ const state = {
     currentCall: null,
     incomingCallObj: null,
     audioCtx: null,
-    gainNode: null,
-    compressor: null,
     remoteSource: null,
     localSource: null,
     localAnalyser: null,
@@ -958,7 +954,7 @@ const audioConstraints = {
     audio: {
         echoCancellation: true,
         noiseSuppression: true,
-        autoGainControl: false,
+        autoGainControl: true,
         channelCount: 1
     }
 };
@@ -1137,7 +1133,7 @@ function notifyIncomingCall(callerId) {
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
             const notif = new Notification('Incoming Voice Call', {
-                body: `${callerId.toUpperCase()} is calling you on AudioLink.`,
+                body: `${callerId} is calling you on AudioLink.`,
                 tag: 'audiolink-incoming'
             });
             notif.onclick = () => {
@@ -1219,8 +1215,8 @@ function initializePeer() {
     });
 
     state.peer.on('open', (id) => {
-        document.getElementById('my-id').innerText = id.toUpperCase();
-        document.getElementById('local-user-tag').innerText = id.toUpperCase();
+        document.getElementById('my-id').innerText = id;
+        document.getElementById('local-user-tag').innerText = id;
         document.getElementById('setup-phase').style.display = 'none';
         document.getElementById('call-controls').style.display = 'block';
         updateStatusBadge('Online', 'var(--brand)');
@@ -1289,11 +1285,11 @@ function initializePeer() {
    ========================================================================= */
 function showIncomingCallModal(callerId) {
     const modal = document.getElementById('incoming-modal');
-    document.getElementById('incoming-caller-id').innerText = callerId.toUpperCase();
+    document.getElementById('incoming-caller-id').innerText = callerId;
     modal.style.display = 'flex';
     
     updateStatusBadge('Incoming', 'var(--cyan)');
-    setAlertTitle(`🔔 Call from ${callerId.toUpperCase()}`);
+    setAlertTitle(`🔔 Call from ${callerId}`);
     notifyIncomingCall(callerId);
     startRingTone(true);
 }
@@ -1366,7 +1362,7 @@ async function startCall() {
 }
 
 function showOutgoingCallUI(targetName) {
-    document.getElementById('outgoing-target-name').innerText = targetName.toUpperCase();
+    document.getElementById('outgoing-target-name').innerText = targetName;
     document.getElementById('outgoing-box').style.display = 'block';
     document.getElementById('btn-start-call').disabled = true;
     updateStatusBadge('Calling', 'var(--cyan)');
@@ -1432,52 +1428,30 @@ function handleCall(call, isOutgoing = false) {
         document.getElementById('call-controls').style.display = 'none';
         document.getElementById('call-stage').style.display = 'block';
         
-        document.getElementById('remote-user-tag').innerText = call.peer.toUpperCase();
+        document.getElementById('remote-user-tag').innerText = call.peer;
         
         updateStatusBadge('Active', 'var(--brand)');
         playConnectChime();
         acquireWakeLock();
 
-        // Chromium WebRTC pipeline: attach to audio element and call .play()
+        // Native WebRTC Audio pipeline: direct to unmuted <audio> element for full AEC
         const remoteAudio = document.getElementById('remote-audio');
         remoteAudio.srcObject = remoteStream;
-        remoteAudio.muted = true;
+        remoteAudio.muted = false;
+        applyGainValue(document.getElementById('gain-slider').value);
         remoteAudio.play().catch(() => {});
 
-        // Web Audio API Graph for Remote Audio (Gain + Dynamics Compressor)
-        const ctx = getAudioCtx();
-
-        if (state.remoteSource) state.remoteSource.disconnect();
-        if (state.gainNode) state.gainNode.disconnect();
-        if (state.compressor) state.compressor.disconnect();
-
+        // Isolated speech detection analyser for speaking indicator (does NOT route to speakers)
         try {
+            const ctx = getAudioCtx();
+            if (state.remoteSource) state.remoteSource.disconnect();
             state.remoteSource = ctx.createMediaStreamSource(remoteStream);
-            state.gainNode = ctx.createGain();
-            state.compressor = ctx.createDynamicsCompressor();
-
-            // Speech detection analyser for speaking indicator
             state.remoteAnalyser = ctx.createAnalyser();
             state.remoteAnalyser.fftSize = 64;
             state.remoteAudioData = new Uint8Array(state.remoteAnalyser.frequencyBinCount);
-
-            state.compressor.threshold.value = -18;
-            state.compressor.knee.value = 12;
-            state.compressor.ratio.value = 4;
-            state.compressor.attack.value = 0.003;
-            state.compressor.release.value = 0.25;
-
-            const sliderVal = document.getElementById('gain-slider').value;
-            applyGainValue(sliderVal);
-
-            state.remoteSource.connect(state.gainNode);
-            state.gainNode.connect(state.compressor);
-            state.compressor.connect(ctx.destination);
-            
             state.remoteSource.connect(state.remoteAnalyser);
         } catch(e) {
-            console.warn("Web Audio API processing fallback:", e);
-            remoteAudio.muted = false;
+            console.warn("Speech analyser setup error:", e);
         }
 
         setupMeter(state.localStream);
@@ -1702,18 +1676,18 @@ function stopCallTimer() {
 }
 
 /* =========================================================================
-   VOLUME GAIN SLIDER & DECIBEL COMPUTATION
+   VOLUME CONTROL & AUDIO BALANCING
    ========================================================================= */
 function applyGainValue(value) {
-    const numeric = Number(value);
-    const multiplier = numeric / 100;
-    const db = multiplier > 0 ? (20 * Math.log10(multiplier)).toFixed(1) : '-∞';
-    const sign = Number(db) > 0 ? '+' : '';
+    const numeric = Math.max(0, Math.min(100, Number(value)));
+    const pct = Math.round(numeric);
+    const fraction = numeric / 100;
     
-    document.getElementById('gain-db-display').innerText = `${multiplier.toFixed(1)}x (${sign}${db} dB)`;
+    document.getElementById('gain-db-display').innerText = `${pct}%`;
     
-    if (state.gainNode) {
-        state.gainNode.gain.value = multiplier;
+    const remoteAudio = document.getElementById('remote-audio');
+    if (remoteAudio) {
+        remoteAudio.volume = fraction;
     }
 }
 
@@ -1856,14 +1830,6 @@ function cleanup() {
         state.remoteSource.disconnect();
         state.remoteSource = null;
     }
-    if (state.gainNode) {
-        state.gainNode.disconnect();
-        state.gainNode = null;
-    }
-    if (state.compressor) {
-        state.compressor.disconnect();
-        state.compressor = null;
-    }
     if (state.localAnalyser) {
         state.localAnalyser.disconnect();
         state.localAnalyser = null;
@@ -1984,7 +1950,7 @@ function checkUrlInviteParams() {
         if (banner) {
             banner.textContent = "Incoming invite to connect with ";
             const strong = document.createElement('strong');
-            strong.textContent = cleanTarget.toUpperCase();
+            strong.textContent = cleanTarget;
             banner.appendChild(strong);
             banner.style.display = 'flex';
         }
@@ -1992,7 +1958,7 @@ function checkUrlInviteParams() {
         const savedUser = localStorage.getItem('audiolink_username') || localStorage.getItem('webrtc_p2p_username');
         if (savedUser && !state.peer) {
             const btnInit = document.getElementById('btn-init-uplink');
-            btnInit.textContent = `Connect to ${cleanTarget.toUpperCase()} as "${savedUser.toUpperCase()}"`;
+            btnInit.textContent = `Connect to ${cleanTarget} as "${savedUser}"`;
             state.autoCallTarget = cleanTarget;
         }
     }
