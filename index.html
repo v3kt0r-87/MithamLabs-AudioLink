@@ -1009,6 +1009,17 @@ function unlockAudioContext() {
         if (ctx && ctx.state === 'suspended') {
             ctx.resume().catch(() => {});
         }
+        const ringAudio = document.getElementById('ring-audio');
+        if (ringAudio && !ringAudio.dataset.unlocked) {
+            const p = ringAudio.play();
+            if (p !== undefined) {
+                p.then(() => {
+                    ringAudio.pause();
+                    ringAudio.currentTime = 0;
+                    ringAudio.dataset.unlocked = "true";
+                }).catch(() => {});
+            }
+        }
     } catch(e) {}
 }
 
@@ -1267,6 +1278,14 @@ function initializePeer() {
         }
         state.incomingCallObj = call;
         showIncomingCallModal(call.peer);
+
+        call.on('close', () => {
+            if (state.incomingCallObj === call) {
+                hideIncomingCallModal();
+                state.incomingCallObj = null;
+                updateStatusBadge('Online', 'var(--brand)');
+            }
+        });
     });
 
     state.peer.on('error', (err) => {
