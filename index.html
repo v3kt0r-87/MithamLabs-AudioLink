@@ -918,6 +918,8 @@ kbd {
 
 <!-- Native audio element for WebRTC playback & Echo Cancellation (AEC) reference -->
 <audio id="remote-audio" autoplay playsinline></audio>
+<!-- Custom ringtone audio element -->
+<audio id="ring-audio" src="call_ring.mp3" preload="auto" loop></audio>
 
 <script>
 /* =========================================================================
@@ -1012,6 +1014,31 @@ function unlockAudioContext() {
 
 function startRingTone(isIncoming = true) {
     stopRingTone();
+    const ringAudio = document.getElementById('ring-audio');
+    if (ringAudio && isIncoming) {
+        ringAudio.currentTime = 0;
+        const playPromise = ringAudio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(() => playSynthRingTone(true));
+        }
+        return;
+    }
+    playSynthRingTone(isIncoming);
+}
+
+function stopRingTone() {
+    const ringAudio = document.getElementById('ring-audio');
+    if (ringAudio) {
+        ringAudio.pause();
+        ringAudio.currentTime = 0;
+    }
+    if (state.ringInterval) {
+        clearInterval(state.ringInterval);
+        state.ringInterval = null;
+    }
+}
+
+function playSynthRingTone(isIncoming = true) {
     const playTone = () => {
         try {
             const ctx = getAudioCtx();
@@ -1039,13 +1066,6 @@ function startRingTone(isIncoming = true) {
     };
     playTone();
     state.ringInterval = setInterval(playTone, isIncoming ? 1800 : 2500);
-}
-
-function stopRingTone() {
-    if (state.ringInterval) {
-        clearInterval(state.ringInterval);
-        state.ringInterval = null;
-    }
 }
 
 function playConnectChime() {
