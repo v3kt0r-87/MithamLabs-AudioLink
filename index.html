@@ -515,8 +515,9 @@ body {
 
 @media (max-width: 480px) {
     .room-grid {
-        grid-template-columns: 1fr;
-        gap: 14px;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 8px;
+        padding: 16px 8px;
     }
 }
 
@@ -623,40 +624,6 @@ body {
     opacity: 0.35;
 }
 
-/* VOICE MODE SELECTOR (Live vs PTT) */
-.segmented-control {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    background: var(--bg-card-subtle);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 4px;
-    margin-bottom: 18px;
-}
-
-.segment-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    padding: 8px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    border-radius: 6px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    transition: all 0.15s ease;
-}
-
-.segment-btn.active {
-    background: var(--bg-card);
-    color: var(--text-primary);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-}
-
 /* GAIN CONTROLLER */
 .gain-card {
     background: var(--bg-card-subtle);
@@ -699,15 +666,16 @@ body {
 /* ACTION CONTROLS ROW */
 .action-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
     margin-bottom: 16px;
 }
 
-@media (max-width: 480px) {
-    .action-grid {
-        grid-template-columns: 1fr;
-    }
+#btn-mute {
+    grid-column: 1 / -1;
+    padding: 13px;
+    font-size: 13px;
+    letter-spacing: 0.3px;
 }
 
 .toggle-btn {
@@ -907,18 +875,6 @@ kbd {
             </div>
         </div>
 
-        <!-- GAMING VOICE MODE (LIVE vs PTT) -->
-        <div class="segmented-control">
-            <button type="button" id="btn-mode-vad" class="segment-btn active">
-                <span>Voice Activity</span>
-                <kbd>M</kbd>
-            </button>
-            <button type="button" id="btn-mode-ptt" class="segment-btn">
-                <span>Push-to-Talk</span>
-                <kbd>Space</kbd>
-            </button>
-        </div>
-
         <!-- REMOTE AUDIO GAIN -->
         <div class="gain-card">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -942,7 +898,7 @@ kbd {
         </button>
 
         <div class="footer-hint">
-            Hotkeys: <kbd>M</kbd> Mute &bull; <kbd>Space</kbd> PTT (Hold) &bull; <kbd>Esc</kbd> End Call
+            Hotkeys: <kbd>M</kbd> Mute &bull; <kbd>Esc</kbd> End Call
         </div>
     </section>
 
@@ -977,8 +933,6 @@ const state = {
     isNsOn: true,
     isEcOn: true,
     isMuted: false,
-    isPttMode: false,
-    isPttKeyPressed: false,
     ringInterval: null,
     iceDisconnectTimeout: null,
     wakeLock: null,
@@ -1651,7 +1605,7 @@ function stopMeter() {
 }
 
 /* =========================================================================
-   HARDWARE AUDIO PROCESSING & MUTE / PTT CONTROLS
+   HARDWARE AUDIO PROCESSING & MUTE CONTROLS
    ========================================================================= */
 function toggleMute() {
     if (!state.localStream) return;
@@ -1663,15 +1617,6 @@ function toggleMute() {
 
     updateMuteUI();
     playMuteBeep(state.isMuted);
-}
-
-function setMuteState(muted) {
-    if (!state.localStream) return;
-    state.isMuted = muted;
-    state.localStream.getAudioTracks().forEach(track => {
-        track.enabled = !muted;
-    });
-    updateMuteUI();
 }
 
 function updateMuteUI() {
@@ -1740,24 +1685,6 @@ function resetControlButtons() {
     const btnEc = document.getElementById('btn-ec');
     btnEc.innerText = "Echo Cancel: On";
     btnEc.className = "toggle-btn is-active";
-
-    setVoiceMode(false);
-}
-
-function setVoiceMode(isPtt) {
-    state.isPttMode = isPtt;
-    const vadBtn = document.getElementById('btn-mode-vad');
-    const pttBtn = document.getElementById('btn-mode-ptt');
-
-    if (isPtt) {
-        pttBtn.classList.add('active');
-        vadBtn.classList.remove('active');
-        setMuteState(true);
-    } else {
-        vadBtn.classList.add('active');
-        pttBtn.classList.remove('active');
-        setMuteState(false);
-    }
 }
 
 /* =========================================================================
@@ -2129,10 +2056,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-ec').addEventListener('click', toggleEC);
     document.getElementById('btn-end-call').addEventListener('click', endCall);
 
-    // Voice mode switches
-    document.getElementById('btn-mode-vad').addEventListener('click', () => setVoiceMode(false));
-    document.getElementById('btn-mode-ptt').addEventListener('click', () => setVoiceMode(true));
-
     // Global click listener to unlock Web Audio context on any user interaction
     document.addEventListener('click', unlockAudioContext, { once: true });
 
@@ -2151,19 +2074,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // PUSH-TO-TALK (Spacebar hold to transmit)
-        if (state.currentCall && state.isPttMode && e.code === 'Space') {
-            e.preventDefault();
-            if (!state.isPttKeyPressed) {
-                state.isPttKeyPressed = true;
-                setMuteState(false);
-            }
-            return;
-        }
-
         // Call shortcuts
         if (e.key === 'm' || e.key === 'M') {
-            if (state.currentCall && !state.isPttMode) {
+            if (state.currentCall) {
                 toggleMute();
             }
         } else if (e.key === 'Escape') {
@@ -2174,23 +2087,6 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (state.currentCall) {
                 endCall();
             }
-        }
-    });
-
-    // Spacebar keyup for Push-To-Talk release
-    window.addEventListener('keyup', (e) => {
-        if (state.currentCall && state.isPttMode && e.code === 'Space') {
-            e.preventDefault();
-            state.isPttKeyPressed = false;
-            setMuteState(true);
-        }
-    });
-
-    // Window blur event to auto-release Push-to-Talk when tabbing away
-    window.addEventListener('blur', () => {
-        if (state.currentCall && state.isPttMode && state.isPttKeyPressed) {
-            state.isPttKeyPressed = false;
-            setMuteState(true);
         }
     });
 });
