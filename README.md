@@ -1,8 +1,9 @@
-# P2P Voice Call (WebRTC & PeerJS)
+# AudioLink — Zero Latency P2P Voice (WebRTC & PeerJS)
 
-A lightweight, modern, low-resource browser-based peer-to-peer voice calling web application built using WebRTC and PeerJS, designed for zero-latency communication during gaming sessions or when standard VOIP apps fail.
+A lightweight, modern, low-resource peer-to-peer voice calling application built using WebRTC and PeerJS, designed for zero-latency communication during gaming sessions or when standard VOIP apps fail. Available both as an instant web app and as a standalone desktop app for Linux and Windows.
 
-[View Live App](https://v3kt0r-87.github.io/WebRTC-P2PCall/)
+- 🌐 **[Launch Web App](https://v3kt0r-87.github.io/WebRTC-P2PCall/)**
+- 🖥️ **Desktop Releases:** Download precompiled Linux (`.AppImage`, `.deb`) and Windows (`.exe`, portable) binaries from the [GitHub Releases](../../releases) page or Actions artifacts.
 
 ## Features
 
@@ -29,11 +30,25 @@ A lightweight, modern, low-resource browser-based peer-to-peer voice calling web
 | <kbd>M</kbd> | Toggle Microphone Mute / Live |
 | <kbd>Esc</kbd> | Cancel outgoing call / Decline incoming / Terminate active call |
 
+## Desktop Applications (Linux & Windows)
+
+AudioLink can be run as a standalone desktop app powered by Electron:
+- **Zero Local Toolchain Needed:** Binaries are automatically built in the cloud via GitHub Actions.
+- **Linux:** `.AppImage` (portable, runs anywhere) and `.deb` (Debian, Ubuntu, Mint).
+- **Windows:** NSIS Installer (`Setup.exe`) and Portable executable.
+- **Microphone Permissions:** Pre-authorized native audio pipeline with full hardware AEC and Noise Suppression.
+
+To build manually in your fork:
+1. Navigate to the **Actions** tab on GitHub.
+2. Select **Build Desktop Apps** and click **Run workflow**.
+3. Download the compiled packages directly from the workflow artifacts or tag a release (`v1.0.0`) to generate automated GitHub releases.
+
 ## Technologies Used
 
 - **WebRTC** (Real-Time Communications, Opus Codec)
 - **PeerJS** (P2P Signaling with automatic reconnection watchdog)
 - **Web Audio API** (Unified audio graph processing, dynamic compression, sound cues)
+- **Electron & electron-builder** (Cross-platform desktop packaging with automated GitHub Actions CI)
 - **HTML5 & Vanilla CSS3** (Dual-theme modern interface, responsive 100dvh layout)
 - **Vanilla JavaScript** (Zero framework bloat, minimal CPU/memory footprint)
 
