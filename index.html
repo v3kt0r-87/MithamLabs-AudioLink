@@ -443,16 +443,11 @@ body {
     gap: 14px;
 }
 
-.modal-avatar {
-    width: 68px;
-    height: 68px;
-    border-radius: var(--radius-full);
-    border: 2px solid var(--brand);
-}
-
 .modal-user {
     font-size: 20px;
-    font-weight: 700;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
     word-break: break-all;
 }
 
@@ -500,24 +495,24 @@ body {
     color: var(--cyan);
 }
 
-/* PARTICIPANT CARDS (Sleek Voice Room Layout) */
+/* PARTICIPANT CARDS (Clean Minimal Voice Room Layout) */
 .room-grid {
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     background: var(--bg-card-subtle);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
-    padding: 24px 16px;
+    padding: 16px 14px;
     margin-bottom: 20px;
 }
 
 @media (max-width: 480px) {
     .room-grid {
         grid-template-columns: 1fr auto 1fr;
-        gap: 8px;
-        padding: 16px 8px;
+        gap: 6px;
+        padding: 12px 6px;
     }
 }
 
@@ -525,48 +520,72 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    gap: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 10px;
+    min-width: 0;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.avatar-frame {
-    width: 68px;
-    height: 68px;
-    border-radius: var(--radius-full);
-    border: 2px solid var(--border);
-    background: var(--bg-base);
-    padding: 2px;
-    transition: all 0.15s ease;
-    position: relative;
+@media (max-width: 480px) {
+    .user-card {
+        padding: 10px 4px;
+        gap: 3px;
+    }
 }
 
-.avatar-frame img {
-    width: 100%;
-    height: 100%;
-    border-radius: var(--radius-full);
-    object-fit: cover;
-    display: block;
-}
-
-/* Remote Speaking Glow */
-.user-card.is-speaking .avatar-frame {
+/* Remote Speaking Glow on User Card */
+.user-card.is-speaking {
     border-color: var(--brand) !important;
-    box-shadow: 0 0 12px var(--brand);
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.35);
+}
+
+.user-badge {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
 }
 
 .user-name {
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 800;
     color: var(--text-primary);
-    max-width: 120px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+    .user-name {
+        font-size: 12px;
+        letter-spacing: 0.3px;
+    }
 }
 
 .user-meta {
     font-size: 10px;
     color: var(--text-muted);
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+    .user-meta {
+        font-size: 9px;
+    }
 }
 
 .room-center {
@@ -738,7 +757,6 @@ kbd {
 <div id="incoming-modal" class="modal-backdrop" style="display: none;">
     <div class="modal-box">
         <span class="section-label" style="margin-bottom:0; color:var(--brand);">Incoming Voice Link</span>
-        <img id="incoming-avatar" class="modal-avatar" alt="Caller Avatar">
         <div id="incoming-caller-id" class="modal-user mono">CALLER</div>
         <div class="user-meta">Wants to establish direct P2P audio</div>
         <div style="display:flex; gap:10px; width:100%; margin-top:8px;">
@@ -840,11 +858,9 @@ kbd {
 
         <!-- ROOM PARTICIPANTS -->
         <div class="room-grid">
-            <div class="user-card">
-                <div class="avatar-frame">
-                    <img id="my-avatar" alt="Local Avatar">
-                </div>
-                <div class="user-name mono" id="local-user-tag">You</div>
+            <div class="user-card" id="local-card">
+                <span class="user-badge mono">YOU</span>
+                <div class="user-name mono" id="local-user-tag">---</div>
                 <div class="user-meta mono" id="local-ip">---</div>
             </div>
 
@@ -856,10 +872,8 @@ kbd {
             </div>
 
             <div class="user-card" id="peer-card">
-                <div class="avatar-frame">
-                    <img id="peer-avatar" alt="Remote Avatar">
-                </div>
-                <div class="user-name mono" id="remote-user-tag">Target</div>
+                <span class="user-badge mono">PEER</span>
+                <div class="user-name mono" id="remote-user-tag">---</div>
                 <div class="user-meta mono" id="remote-ip">---</div>
             </div>
         </div>
@@ -976,46 +990,6 @@ function applyTheme(theme) {
         icon.innerText = '☀️';
         text.innerText = 'Light';
     }
-
-    // Refresh avatars for optimal theme background contrast
-    const myId = document.getElementById('my-id').innerText.trim();
-    if (myId && myId !== '---') {
-        document.getElementById('my-avatar').src = generateIdenticonSvg(myId);
-    }
-    if (state.currentCall && state.currentCall.peer) {
-        document.getElementById('peer-avatar').src = generateIdenticonSvg(state.currentCall.peer);
-    }
-}
-
-/* =========================================================================
-   DETERMINISTIC CLIENT-SIDE SVG IDENTICON GENERATOR
-   ========================================================================= */
-function generateIdenticonSvg(str) {
-    let hash = 0;
-    const clean = String(str || 'guest').trim().toLowerCase();
-    for (let i = 0; i < clean.length; i++) {
-        hash = ((hash << 5) - hash + clean.charCodeAt(i)) | 0;
-    }
-    const h = Math.abs(hash);
-    const hue = h % 360;
-    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-    const fg = `hsl(${hue}, 80%, ${isDark ? 55 : 45}%)`;
-    const bg = isDark ? '#080a0f' : '#f1f5f9';
-    
-    let rects = '';
-    for (let x = 0; x < 3; x++) {
-        for (let y = 0; y < 5; y++) {
-            const bit = (h >> ((x * 5 + y) % 31)) & 1;
-            if (bit) {
-                rects += `<rect x="${x * 12 + 10}" y="${y * 12 + 10}" width="9" height="9" fill="${fg}" rx="2"/>`;
-                if (x < 2) {
-                    rects += `<rect x="${(4 - x) * 12 + 10}" y="${y * 12 + 10}" width="9" height="9" fill="${fg}" rx="2"/>`;
-                }
-            }
-        }
-    }
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" width="80" height="80"><rect width="80" height="80" fill="${bg}" rx="16"/>${rects}</svg>`;
-    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
 /* =========================================================================
@@ -1163,8 +1137,7 @@ function notifyIncomingCall(callerId) {
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
             const notif = new Notification('Incoming Voice Call', {
-                body: `${callerId} is calling you on AudioLink.`,
-                icon: generateIdenticonSvg(callerId),
+                body: `${callerId.toUpperCase()} is calling you on AudioLink.`,
                 tag: 'audiolink-incoming'
             });
             notif.onclick = () => {
@@ -1246,12 +1219,10 @@ function initializePeer() {
     });
 
     state.peer.on('open', (id) => {
-        document.getElementById('my-id').innerText = id;
-        document.getElementById('local-user-tag').innerText = id.substring(0, 10);
+        document.getElementById('my-id').innerText = id.toUpperCase();
+        document.getElementById('local-user-tag').innerText = id.toUpperCase();
         document.getElementById('setup-phase').style.display = 'none';
         document.getElementById('call-controls').style.display = 'block';
-        
-        document.getElementById('my-avatar').src = generateIdenticonSvg(id);
         updateStatusBadge('Online', 'var(--brand)');
         
         checkUrlInviteParams();
@@ -1318,12 +1289,11 @@ function initializePeer() {
    ========================================================================= */
 function showIncomingCallModal(callerId) {
     const modal = document.getElementById('incoming-modal');
-    document.getElementById('incoming-caller-id').innerText = callerId;
-    document.getElementById('incoming-avatar').src = generateIdenticonSvg(callerId);
+    document.getElementById('incoming-caller-id').innerText = callerId.toUpperCase();
     modal.style.display = 'flex';
     
     updateStatusBadge('Incoming', 'var(--cyan)');
-    setAlertTitle(`🔔 Call from ${callerId}`);
+    setAlertTitle(`🔔 Call from ${callerId.toUpperCase()}`);
     notifyIncomingCall(callerId);
     startRingTone(true);
 }
@@ -1396,7 +1366,7 @@ async function startCall() {
 }
 
 function showOutgoingCallUI(targetName) {
-    document.getElementById('outgoing-target-name').innerText = targetName;
+    document.getElementById('outgoing-target-name').innerText = targetName.toUpperCase();
     document.getElementById('outgoing-box').style.display = 'block';
     document.getElementById('btn-start-call').disabled = true;
     updateStatusBadge('Calling', 'var(--cyan)');
@@ -1462,8 +1432,7 @@ function handleCall(call, isOutgoing = false) {
         document.getElementById('call-controls').style.display = 'none';
         document.getElementById('call-stage').style.display = 'block';
         
-        document.getElementById('remote-user-tag').innerText = call.peer.substring(0, 10);
-        document.getElementById('peer-avatar').src = generateIdenticonSvg(call.peer);
+        document.getElementById('remote-user-tag').innerText = call.peer.toUpperCase();
         
         updateStatusBadge('Active', 'var(--brand)');
         playConnectChime();
@@ -1487,7 +1456,7 @@ function handleCall(call, isOutgoing = false) {
             state.gainNode = ctx.createGain();
             state.compressor = ctx.createDynamicsCompressor();
 
-            // Speech detection analyser for glowing avatar
+            // Speech detection analyser for speaking indicator
             state.remoteAnalyser = ctx.createAnalyser();
             state.remoteAnalyser.fftSize = 64;
             state.remoteAudioData = new Uint8Array(state.remoteAnalyser.frequencyBinCount);
@@ -2015,7 +1984,7 @@ function checkUrlInviteParams() {
         if (banner) {
             banner.textContent = "Incoming invite to connect with ";
             const strong = document.createElement('strong');
-            strong.textContent = cleanTarget;
+            strong.textContent = cleanTarget.toUpperCase();
             banner.appendChild(strong);
             banner.style.display = 'flex';
         }
@@ -2023,7 +1992,7 @@ function checkUrlInviteParams() {
         const savedUser = localStorage.getItem('audiolink_username') || localStorage.getItem('webrtc_p2p_username');
         if (savedUser && !state.peer) {
             const btnInit = document.getElementById('btn-init-uplink');
-            btnInit.textContent = `Connect to ${cleanTarget} as "${savedUser}"`;
+            btnInit.textContent = `Connect to ${cleanTarget.toUpperCase()} as "${savedUser.toUpperCase()}"`;
             state.autoCallTarget = cleanTarget;
         }
     }

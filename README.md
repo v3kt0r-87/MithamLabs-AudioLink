@@ -10,7 +10,7 @@ A lightweight, modern, low-resource browser-based peer-to-peer voice calling web
 - **Dark & Light Themes:** Instant toggle between OLED Pure Black and Crisp Minimal Light themes with persistent preference storage.
 - **Ultra-Low Resource Footprint:** Zero continuous background canvas animations and zero heavy GPU blur filters for near-zero idle CPU, GPU, and RAM usage.
 - **Microphone Mute & Hotkeys:** Instant mic mute toggle with keyboard shortcut support (<kbd>M</kbd> to toggle mute, <kbd>Esc</kbd> to end/decline).
-- **Remote Speech Detection:** Subtle speaking indicator on your teammate's avatar when they are speaking.
+- **Remote Speech Detection:** Subtle speaking indicator on your teammate's user card when they are speaking.
 - **Hardware Audio Processing:** Real-time toggles for Noise Suppression and Echo Cancellation via WebRTC track constraints.
 - **Call Management & Synthesized Ringtones:** Zero-latency Web Audio ringtones, connect chimes, and background desktop alerts.
 - **Screen Wake Lock:** Prevents mobile and laptop displays from dimming or sleeping during active voice sessions.
@@ -18,7 +18,7 @@ A lightweight, modern, low-resource browser-based peer-to-peer voice calling web
 - **Audio Dynamic Compression & Gain:** Gain slider (0x to 3.0x with decibel calculation) and dynamics compression to prevent clipping.
 - **Live Telemetry & Diagnostics:** Real-time stats for average RTT latency, jitter, packet loss, connection integrity, network routing type, and IP resolution.
 - **Lightweight Audio Level Meter:** Efficient, low-frequency mic intensity bar with live dB input metering.
-- **Zero External Tracking:** Offline-ready, deterministic client-side SVG identicons (no third-party avatar CDNs or tracking).
+- **Zero External Tracking:** No cookies, third-party analytics, or external asset dependencies.
 - **Session Persistence:** Remembers your chosen username via local storage.
 
 ## Keyboard Shortcuts
