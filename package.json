@@ -16,6 +16,7 @@
   "build": {
     "appId": "com.audiolink.p2pcall",
     "productName": "AudioLink",
+    "asar": false,
     "directories": {
       "output": "dist-electron"
     },

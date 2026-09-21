@@ -1,6 +1,9 @@
 const { app, BrowserWindow, shell } = require('electron');
 const path = require('path');
 
+// Allow unprompted audio autoplay for ringtones
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 680,
@@ -13,7 +16,8 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true
+      sandbox: true,
+      autoplayPolicy: 'no-user-gesture-required'
     }
   });
 
