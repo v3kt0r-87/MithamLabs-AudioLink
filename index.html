@@ -924,6 +924,7 @@ kbd {
 <audio id="dial-audio" src="call_dail.opus" preload="auto" loop></audio>
 <audio id="connected-audio" src="call_connected.opus" preload="auto"></audio>
 <audio id="ended-audio" src="call_ended.opus" preload="auto"></audio>
+<audio id="failed-audio" src="call_failed.opus" preload="auto"></audio>
 
 
 <script>
@@ -932,6 +933,7 @@ kbd {
    ========================================================================= */
 const state = {
     peer: null,
+    controlConn: null,
     localStream: null,
     currentCall: null,
     incomingCallObj: null,
@@ -1014,7 +1016,8 @@ async function preloadSoundBuffers() {
         const ctx = getAudioCtx();
         const files = {
             connected: 'call_connected.opus',
-            ended: 'call_ended.opus'
+            ended: 'call_ended.opus',
+            failed: 'call_failed.opus'
         };
         for (const [key, url] of Object.entries(files)) {
             if (state.soundBuffers[key]) continue;
@@ -1061,7 +1064,7 @@ function unlockAudioContext() {
             ctx.resume().catch(() => {});
         }
         preloadSoundBuffers();
-        ['ring-audio', 'dial-audio', 'connected-audio', 'ended-audio'].forEach(id => {
+        ['ring-audio', 'dial-audio', 'connected-audio', 'ended-audio', 'failed-audio'].forEach(id => {
             const el = document.getElementById(id);
             if (el && !el.dataset.unlocked) {
                 el.dataset.unlocked = "true";
@@ -1186,6 +1189,10 @@ function playSynthDisconnectTone() {
         osc.start(now);
         osc.stop(now + 0.24);
     } catch(e) {}
+}
+
+function playFailedTone() {
+    playInstantSound('failed', 'failed-audio', playSynthDisconnectTone);
 }
 
 function playMuteBeep(muted) {
@@ -1343,9 +1350,15 @@ function initializePeer() {
         }
     });
 
+    // INCOMING DATA CONNECTION HANDLER (Call Control Signaling)
+    state.peer.on('connection', (conn) => {
+        bindControlConnection(conn);
+    });
+
     // INCOMING CALL HANDLER
     state.peer.on('call', (call) => {
         if (state.currentCall) {
+            sendControlSignal(call.peer, { type: 'busy' });
             call.close(); // Busy
             return;
         }
@@ -1366,7 +1379,8 @@ function initializePeer() {
         
         if (err.type === 'peer-unavailable') {
             errorMsg = "Target username is offline or does not exist.";
-            cancelOutgoingCallUI();
+            playFailedTone();
+            cancelOutgoingCallUI(true);
         } else if (err.type === 'network') {
             errorMsg = "Signaling network dropped. Reconnecting...";
             if (state.peer && !state.peer.destroyed) state.peer.reconnect();
@@ -1431,11 +1445,101 @@ async function acceptIncomingCall() {
 
 function declineIncomingCall() {
     if (state.incomingCallObj) {
+        const caller = state.incomingCallObj.peer;
+        sendControlSignal(caller, { type: 'decline' });
         state.incomingCallObj.close();
         state.incomingCallObj = null;
     }
     hideIncomingCallModal();
     updateStatusBadge('Online', 'var(--brand)');
+}
+
+/* =========================================================================
+   CALL CONTROL SIGNALING (Instant Decline / Cancel / Busy / End)
+   ========================================================================= */
+function sendControlSignal(target, payload) {
+    if (state.controlConn && state.controlConn.peer === target && state.controlConn.open) {
+        try {
+            state.controlConn.send(payload);
+            return;
+        } catch(e) {}
+    }
+    if (state.peer && !state.peer.destroyed) {
+        try {
+            const conn = state.peer.connect(target, { reliable: true });
+            conn.on('open', () => {
+                conn.send(payload);
+                setTimeout(() => {
+                    try { conn.close(); } catch(e) {}
+                }, 800);
+            });
+        } catch(e) {}
+    }
+}
+
+function setupControlConnection(target) {
+    if (state.controlConn) {
+        try { state.controlConn.close(); } catch(e) {}
+        state.controlConn = null;
+    }
+    try {
+        const conn = state.peer.connect(target, { reliable: true });
+        bindControlConnection(conn);
+    } catch(e) {}
+}
+
+function bindControlConnection(conn) {
+    state.controlConn = conn;
+    conn.on('data', (data) => {
+        if (!data || !data.type) return;
+        const fromPeer = conn.peer;
+        if (data.type === 'decline') {
+            handleCallDeclined(fromPeer);
+        } else if (data.type === 'busy') {
+            handleCallBusy(fromPeer);
+        } else if (data.type === 'cancel') {
+            handleCallCancelled(fromPeer);
+        } else if (data.type === 'end') {
+            handlePeerDisconnected("Call ended by peer.");
+        }
+    });
+    conn.on('close', () => {
+        if (state.controlConn === conn) {
+            state.controlConn = null;
+        }
+    });
+}
+
+function handleCallDeclined(fromPeer) {
+    stopRingTone();
+    cancelOutgoingCallUI(true);
+    playFailedTone();
+    showError(document.getElementById('call-error'), `Call declined by ${fromPeer || 'user'}.`);
+    updateStatusBadge('Declined', 'var(--danger)');
+    setTimeout(() => {
+        if (!state.currentCall) updateStatusBadge('Online', 'var(--brand)');
+    }, 4000);
+}
+
+function handleCallBusy(fromPeer) {
+    stopRingTone();
+    cancelOutgoingCallUI(true);
+    playFailedTone();
+    showError(document.getElementById('call-error'), `${fromPeer || 'User'} is currently busy.`);
+    updateStatusBadge('Busy', 'var(--warning)');
+    setTimeout(() => {
+        if (!state.currentCall) updateStatusBadge('Online', 'var(--brand)');
+    }, 4000);
+}
+
+function handleCallCancelled(fromPeer) {
+    if (state.incomingCallObj) {
+        stopRingTone();
+        hideIncomingCallModal();
+        state.incomingCallObj = null;
+        showInfoBanner(`${fromPeer || 'Caller'} cancelled the call.`);
+        updateStatusBadge('Online', 'var(--brand)');
+    }
 }
 
 /* =========================================================================
@@ -1461,6 +1565,9 @@ async function startCall() {
 
     // Immediate visual feedback so user sees "Connecting..." instantly
     showOutgoingCallUI(target, 'connecting');
+
+    // Initiate control connection in parallel
+    setupControlConnection(target);
 
     try {
         state.localStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
@@ -1504,7 +1611,7 @@ function showOutgoingCallUI(targetName, mode = 'connecting') {
     }
 }
 
-function cancelOutgoingCallUI() {
+function cancelOutgoingCallUI(skipSignal = false) {
     document.getElementById('outgoing-box').style.display = 'none';
     const btn = document.getElementById('btn-start-call');
     const btnText = document.getElementById('btn-start-call-text');
@@ -1514,6 +1621,13 @@ function cancelOutgoingCallUI() {
     if (btnIcon) btnIcon.style.display = '';
 
     stopRingTone();
+
+    if (!skipSignal && state.currentCall) {
+        const target = state.currentCall.peer;
+        sendControlSignal(target, { type: 'cancel' });
+        showInfoBanner("Call cancelled.");
+    }
+
     if (state.currentCall) {
         const call = state.currentCall;
         state.currentCall = null;
@@ -1968,6 +2082,7 @@ function endCall() {
     playDisconnectTone();
     if (state.currentCall) {
         const call = state.currentCall;
+        sendControlSignal(call.peer, { type: 'end' });
         state.currentCall = null;
         call.close();
     }
@@ -2035,6 +2150,10 @@ function cleanup() {
 
     state.currentCall = null;
     state.incomingCallObj = null;
+    if (state.controlConn) {
+        try { state.controlConn.close(); } catch(e) {}
+        state.controlConn = null;
+    }
 
     document.getElementById('outgoing-box').style.display = 'none';
     const btn = document.getElementById('btn-start-call');
