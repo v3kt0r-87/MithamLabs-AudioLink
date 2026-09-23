@@ -956,7 +956,10 @@ const state = {
     ringInterval: null,
     iceDisconnectTimeout: null,
     wakeLock: null,
-    autoCallTarget: null
+    autoCallTarget: null,
+    outgoingTarget: null,
+    callTimeout: null,
+    incomingNotification: null
 };
 
 // Audio constraints tuned for lowest latency communication
@@ -1243,13 +1246,16 @@ function requestNotificationPerm() {
 function notifyIncomingCall(callerId) {
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
-            const notif = new Notification('Incoming Voice Call', {
+            state.incomingNotification = new Notification('Incoming Voice Call', {
                 body: `${callerId} is calling you on AudioLink.`,
                 tag: 'audiolink-incoming'
             });
-            notif.onclick = () => {
+            state.incomingNotification.onclick = () => {
                 window.focus();
-                notif.close();
+                if (state.incomingNotification) {
+                    state.incomingNotification.close();
+                    state.incomingNotification = null;
+                }
             };
         } catch(e) {}
     }
@@ -1357,9 +1363,9 @@ function initializePeer() {
 
     // INCOMING CALL HANDLER
     state.peer.on('call', (call) => {
-        if (state.currentCall) {
+        if (state.currentCall || state.outgoingTarget) {
             sendControlSignal(call.peer, { type: 'busy' });
-            call.close(); // Busy
+            try { call.close(); } catch(e) {}
             return;
         }
         state.incomingCallObj = call;
@@ -1367,11 +1373,20 @@ function initializePeer() {
 
         call.on('close', () => {
             if (state.incomingCallObj === call) {
-                hideIncomingCallModal();
-                state.incomingCallObj = null;
-                updateStatusBadge('Online', 'var(--brand)');
+                handleCallCancelled(call.peer);
             }
         });
+
+        if (call.peerConnection) {
+            call.peerConnection.onconnectionstatechange = () => {
+                const s = call.peerConnection.connectionState;
+                if (s === 'closed' || s === 'failed') {
+                    if (state.incomingCallObj === call) {
+                        handleCallCancelled(call.peer);
+                    }
+                }
+            };
+        }
     });
 
     state.peer.on('error', (err) => {
@@ -1424,6 +1439,10 @@ function hideIncomingCallModal() {
     document.getElementById('incoming-modal').style.display = 'none';
     stopRingTone();
     clearAlertTitle();
+    if (state.incomingNotification) {
+        try { state.incomingNotification.close(); } catch(e) {}
+        state.incomingNotification = null;
+    }
 }
 
 async function acceptIncomingCall() {
@@ -1447,10 +1466,13 @@ function declineIncomingCall() {
     if (state.incomingCallObj) {
         const caller = state.incomingCallObj.peer;
         sendControlSignal(caller, { type: 'decline' });
-        state.incomingCallObj.close();
+        try { state.incomingCallObj.close(); } catch(e) {}
         state.incomingCallObj = null;
     }
+    stopRingTone();
     hideIncomingCallModal();
+    playFailedTone();
+    showInfoBanner("Call declined.");
     updateStatusBadge('Online', 'var(--brand)');
 }
 
@@ -1458,23 +1480,32 @@ function declineIncomingCall() {
    CALL CONTROL SIGNALING (Instant Decline / Cancel / Busy / End)
    ========================================================================= */
 function sendControlSignal(target, payload) {
-    if (state.controlConn && state.controlConn.peer === target && state.controlConn.open) {
-        try {
-            state.controlConn.send(payload);
-            return;
-        } catch(e) {}
-    }
-    if (state.peer && !state.peer.destroyed) {
-        try {
-            const conn = state.peer.connect(target, { reliable: true });
-            conn.on('open', () => {
-                conn.send(payload);
-                setTimeout(() => {
-                    try { conn.close(); } catch(e) {}
-                }, 800);
+    if (!target || !state.peer || state.peer.destroyed) return;
+
+    if (state.controlConn && state.controlConn.peer === target) {
+        if (state.controlConn.open) {
+            try { state.controlConn.send(payload); return; } catch(e) {}
+        } else if (state.controlConn.peerConnection && 
+                  (state.controlConn.peerConnection.connectionState === 'closed' || 
+                   state.controlConn.peerConnection.connectionState === 'failed')) {
+            state.controlConn = null;
+        } else {
+            state.controlConn.on('open', () => {
+                try { state.controlConn.send(payload); } catch(e) {}
             });
-        } catch(e) {}
+            return;
+        }
     }
+
+    try {
+        const conn = state.peer.connect(target, { reliable: true });
+        conn.on('open', () => {
+            try { conn.send(payload); } catch(e) {}
+            setTimeout(() => {
+                try { conn.close(); } catch(e) {}
+            }, 1000);
+        });
+    } catch(e) {}
 }
 
 function setupControlConnection(target) {
@@ -1508,13 +1539,20 @@ function bindControlConnection(conn) {
             state.controlConn = null;
         }
     });
+    conn.on('error', () => {
+        if (state.controlConn === conn) {
+            state.controlConn = null;
+        }
+    });
 }
 
 function handleCallDeclined(fromPeer) {
     stopRingTone();
     cancelOutgoingCallUI(true);
     playFailedTone();
-    showError(document.getElementById('call-error'), `Call declined by ${fromPeer || 'user'}.`);
+    const msg = `Call declined by ${fromPeer || 'user'}.`;
+    showError(document.getElementById('call-error'), msg);
+    showInfoBanner(msg);
     updateStatusBadge('Declined', 'var(--danger)');
     setTimeout(() => {
         if (!state.currentCall) updateStatusBadge('Online', 'var(--brand)');
@@ -1525,7 +1563,9 @@ function handleCallBusy(fromPeer) {
     stopRingTone();
     cancelOutgoingCallUI(true);
     playFailedTone();
-    showError(document.getElementById('call-error'), `${fromPeer || 'User'} is currently busy.`);
+    const msg = `${fromPeer || 'User'} is currently busy.`;
+    showError(document.getElementById('call-error'), msg);
+    showInfoBanner(msg);
     updateStatusBadge('Busy', 'var(--warning)');
     setTimeout(() => {
         if (!state.currentCall) updateStatusBadge('Online', 'var(--brand)');
@@ -1536,9 +1576,13 @@ function handleCallCancelled(fromPeer) {
     if (state.incomingCallObj) {
         stopRingTone();
         hideIncomingCallModal();
+        try { state.incomingCallObj.close(); } catch(e) {}
         state.incomingCallObj = null;
+        playFailedTone();
         showInfoBanner(`${fromPeer || 'Caller'} cancelled the call.`);
         updateStatusBadge('Online', 'var(--brand)');
+    } else if (state.currentCall && !state.callStartTime) {
+        handlePeerDisconnected(`${fromPeer || 'Caller'} cancelled the call.`);
     }
 }
 
@@ -1563,15 +1607,36 @@ async function startCall() {
 
     hideError(errorBox);
 
+    state.outgoingTarget = target;
+
     // Immediate visual feedback so user sees "Connecting..." instantly
     showOutgoingCallUI(target, 'connecting');
 
     // Initiate control connection in parallel
     setupControlConnection(target);
 
+    // Auto-timeout after 40 seconds if recipient does not answer
+    if (state.callTimeout) clearTimeout(state.callTimeout);
+    state.callTimeout = setTimeout(() => {
+        if (!state.currentCall || !state.callStartTime) {
+            cancelOutgoingCallUI(false);
+            playFailedTone();
+            showError(errorBox, `No answer from ${target}.`);
+        }
+    }, 40000);
+
     try {
         state.localStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
         
+        // Check if call was cancelled while mic prompt was pending
+        if (!state.outgoingTarget || document.getElementById('outgoing-box').style.display === 'none') {
+            if (state.localStream) {
+                state.localStream.getTracks().forEach(t => t.stop());
+                state.localStream = null;
+            }
+            return;
+        }
+
         // Microphone granted, signal peer and show "Ringing..."
         showOutgoingCallUI(target, 'ringing');
         startRingTone(false);
@@ -1581,7 +1646,7 @@ async function startCall() {
         handleCall(call, true);
     } catch(e) {
         showError(errorBox, "Microphone permission denied. Allow mic access in browser settings.");
-        cancelOutgoingCallUI();
+        cancelOutgoingCallUI(true);
     }
 }
 
@@ -1612,6 +1677,7 @@ function showOutgoingCallUI(targetName, mode = 'connecting') {
 }
 
 function cancelOutgoingCallUI(skipSignal = false) {
+    const shouldSkip = (skipSignal === true);
     document.getElementById('outgoing-box').style.display = 'none';
     const btn = document.getElementById('btn-start-call');
     const btnText = document.getElementById('btn-start-call-text');
@@ -1622,16 +1688,28 @@ function cancelOutgoingCallUI(skipSignal = false) {
 
     stopRingTone();
 
-    if (!skipSignal && state.currentCall) {
-        const target = state.currentCall.peer;
+    if (state.callTimeout) {
+        clearTimeout(state.callTimeout);
+        state.callTimeout = null;
+    }
+
+    const target = (state.currentCall && state.currentCall.peer) || state.outgoingTarget;
+    if (!shouldSkip && target) {
         sendControlSignal(target, { type: 'cancel' });
+        playFailedTone();
         showInfoBanner("Call cancelled.");
     }
 
+    if (state.localStream) {
+        state.localStream.getTracks().forEach(t => t.stop());
+        state.localStream = null;
+    }
+
+    state.outgoingTarget = null;
     if (state.currentCall) {
         const call = state.currentCall;
         state.currentCall = null;
-        call.close();
+        try { call.close(); } catch(e) {}
     }
     updateStatusBadge('Online', 'var(--brand)');
 }
@@ -1677,6 +1755,12 @@ function handleCall(call, isOutgoing = false) {
     }
 
     call.on('stream', async (remoteStream) => {
+        if (state.callTimeout) {
+            clearTimeout(state.callTimeout);
+            state.callTimeout = null;
+        }
+        state.outgoingTarget = null;
+
         stopRingTone();
         clearAlertTitle();
         document.getElementById('outgoing-box').style.display = 'none';
@@ -2090,6 +2174,12 @@ function endCall() {
 }
 
 function cleanup() {
+    if (state.callTimeout) {
+        clearTimeout(state.callTimeout);
+        state.callTimeout = null;
+    }
+    state.outgoingTarget = null;
+
     stopRingTone();
     hideIncomingCallModal();
     stopMeter();
@@ -2296,7 +2386,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-copy-id').addEventListener('click', copyID);
     document.getElementById('btn-copy-link').addEventListener('click', copyInviteLink);
     document.getElementById('btn-start-call').addEventListener('click', startCall);
-    document.getElementById('btn-cancel-outgoing').addEventListener('click', cancelOutgoingCallUI);
+    document.getElementById('btn-cancel-outgoing').addEventListener('click', () => cancelOutgoingCallUI(false));
     document.getElementById('btn-accept').addEventListener('click', acceptIncomingCall);
     document.getElementById('btn-decline').addEventListener('click', declineIncomingCall);
     document.getElementById('btn-mute').addEventListener('click', toggleMute);
@@ -2331,7 +2421,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (state.incomingCallObj) {
                 declineIncomingCall();
             } else if (document.getElementById('outgoing-box').style.display === 'block') {
-                cancelOutgoingCallUI();
+                cancelOutgoingCallUI(false);
             } else if (state.currentCall) {
                 endCall();
             }
