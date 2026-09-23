@@ -1903,44 +1903,61 @@ async function startStats(pc) {
 }
 
 function extractNetworkInfo(stats, hasRtt) {
-    let localCandidate = null;
-    let remoteCandidate = null;
+    let activePair = null;
 
+    // 1. Precise W3C transport pointer to the active candidate pair
     stats.forEach(report => {
-        if (report.type === "candidate-pair" && (report.state === "succeeded" || report.nominated)) {
-            localCandidate = stats.get(report.localCandidateId);
-            remoteCandidate = stats.get(report.remoteCandidateId);
-
-            if (!hasRtt && report.currentRoundTripTime) {
-                const rtt = Math.round(report.currentRoundTripTime * 1000);
-                if (!isNaN(rtt) && rtt > 0) {
-                    recordLatency(rtt);
-                }
-            }
+        if (report.type === "transport" && report.selectedCandidatePairId) {
+            activePair = stats.get(report.selectedCandidatePairId);
         }
     });
 
-    if (localCandidate) {
-        const localIP = localCandidate.address || localCandidate.ip || "[Masked]";
-        document.getElementById("local-ip").innerText = localIP;
-
-        const netTypeEl = document.getElementById("network-type");
-        if (localCandidate.candidateType === 'relay') {
-            netTypeEl.innerText = "Relay (TURN)";
-        } else if (localIP.endsWith(".local")) {
-            netTypeEl.innerText = "LAN (mDNS)";
-        } else if (localIP.startsWith("172.") || localIP.startsWith("10.") || localIP.startsWith("192.168") || localIP.startsWith("fd") || localIP.startsWith("fc")) {
-            netTypeEl.innerText = "LAN / Private";
-        } else if (localIP.includes(":")) {
-            netTypeEl.innerText = "IPv6 Direct";
-        } else {
-            netTypeEl.innerText = localCandidate.candidateType === 'srflx' ? "P2P (STUN)" : "P2P Direct";
-        }
+    // 2. Fallback to candidate-pair with selected === true or nominated & succeeded
+    if (!activePair) {
+        stats.forEach(report => {
+            if (report.type === "candidate-pair") {
+                if (report.selected) {
+                    activePair = report;
+                } else if (!activePair && report.nominated && report.state === "succeeded") {
+                    activePair = report;
+                }
+            }
+        });
     }
-    
-    if (remoteCandidate) {
-        const remoteIP = remoteCandidate.address || remoteCandidate.ip || "---";
-        document.getElementById("remote-ip").innerText = remoteIP;
+
+    if (activePair) {
+        const localCandidate = stats.get(activePair.localCandidateId);
+        const remoteCandidate = stats.get(activePair.remoteCandidateId);
+
+        if (!hasRtt && activePair.currentRoundTripTime) {
+            const rtt = Math.round(activePair.currentRoundTripTime * 1000);
+            if (!isNaN(rtt) && rtt > 0) {
+                recordLatency(rtt);
+            }
+        }
+
+        if (localCandidate) {
+            const localIP = localCandidate.address || localCandidate.ip || "[Masked]";
+            document.getElementById("local-ip").innerText = localIP;
+
+            const netTypeEl = document.getElementById("network-type");
+            if (localCandidate.candidateType === 'relay') {
+                netTypeEl.innerText = "Relay (TURN)";
+            } else if (localIP.endsWith(".local")) {
+                netTypeEl.innerText = "LAN (mDNS)";
+            } else if (localIP.startsWith("172.") || localIP.startsWith("10.") || localIP.startsWith("192.168") || localIP.startsWith("fd") || localIP.startsWith("fc")) {
+                netTypeEl.innerText = "LAN / Private";
+            } else if (localIP.includes(":")) {
+                netTypeEl.innerText = "IPv6 Direct";
+            } else {
+                netTypeEl.innerText = localCandidate.candidateType === 'srflx' ? "P2P (STUN)" : "P2P Direct";
+            }
+        }
+        
+        if (remoteCandidate) {
+            const remoteIP = remoteCandidate.address || remoteCandidate.ip || "---";
+            document.getElementById("remote-ip").innerText = remoteIP;
+        }
     }
 }
 
