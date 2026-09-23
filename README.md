@@ -2,7 +2,7 @@
 
 A lightweight, modern, low-resource browser-based peer-to-peer voice calling application built with WebRTC and PeerJS. Runs as a completely standalone, single-file web app with zero dependencies and no build step required.
 
-🌐 **[Launch Live App](https://v3kt0r-87.github.io/WebRTC-P2PCall/)**
+🌐 **[Launch Live App](https://v3kt0r-87.github.io/MithamLabs-AudioLink/)**
 
 ---
 
