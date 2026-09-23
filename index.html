@@ -959,7 +959,8 @@ const state = {
     autoCallTarget: null,
     outgoingTarget: null,
     callTimeout: null,
-    incomingNotification: null
+    incomingNotification: null,
+    ringSource: null
 };
 
 // Audio constraints tuned for lowest latency communication
@@ -1018,6 +1019,8 @@ async function preloadSoundBuffers() {
     try {
         const ctx = getAudioCtx();
         const files = {
+            ring: 'call_ring.opus',
+            dial: 'call_dail.opus',
             connected: 'call_connected.opus',
             ended: 'call_ended.opus',
             failed: 'call_failed.opus'
@@ -1089,6 +1092,20 @@ function unlockAudioContext() {
 
 function startRingTone(isIncoming = true) {
     stopRingTone();
+    const key = isIncoming ? 'ring' : 'dial';
+    try {
+        const ctx = getAudioCtx();
+        if (state.soundBuffers[key]) {
+            const src = ctx.createBufferSource();
+            src.buffer = state.soundBuffers[key];
+            src.loop = true;
+            src.connect(ctx.destination);
+            src.start(0);
+            state.ringSource = src;
+            return;
+        }
+    } catch(e) {}
+
     const el = document.getElementById(isIncoming ? 'ring-audio' : 'dial-audio');
     if (el) {
         el.dataset.playing = "true";
@@ -1106,6 +1123,13 @@ function startRingTone(isIncoming = true) {
 }
 
 function stopRingTone() {
+    if (state.ringSource) {
+        try {
+            state.ringSource.stop();
+            state.ringSource.disconnect();
+        } catch(e) {}
+        state.ringSource = null;
+    }
     ['ring-audio', 'dial-audio'].forEach(id => {
         const el = document.getElementById(id);
         if (el) {
