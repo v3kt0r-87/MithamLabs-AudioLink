@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-<title>AudioLink — Zero Latency P2P Voice</title>
+<title>Audiolink by MithamLabs — Zero Latency P2P Voice</title>
 
 <!-- Security Headers -->
 <meta name="referrer" content="strict-origin-when-cross-origin">
@@ -741,6 +741,39 @@ kbd {
     color: var(--text-secondary);
     font-family: 'JetBrains Mono', monospace;
 }
+
+/* APP FOOTER & PRIVACY */
+.app-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+.app-footer a, .privacy-back-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color 0.15s ease;
+}
+.app-footer a:hover, .privacy-back-link:hover {
+    color: var(--brand);
+}
+.privacy-content h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 14px 0 4px 0;
+}
+.privacy-content p {
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
 </style>
 </head>
 
@@ -764,7 +797,7 @@ kbd {
     </div>
 </div>
 
-<div class="app-container">
+<div id="main-view" class="app-container">
     
     <!-- HEADER -->
     <header class="app-header">
@@ -772,8 +805,13 @@ kbd {
             <div class="brand-icon">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5v14M7 9v6M22 11v2M2 11v2"/></svg>
             </div>
-            <h1 class="brand-title">AudioLink</h1>
-            <span class="brand-badge">P2P</span>
+            <div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <h1 class="brand-title">Audiolink</h1>
+                    <span class="brand-badge">P2P</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-tertiary); font-weight:500; line-height:1.2;">by MithamLabs</div>
+            </div>
         </div>
         <div class="status-indicator">
             <span class="status-dot" id="system-status"></span>
@@ -915,6 +953,56 @@ kbd {
         </div>
     </section>
 
+    <footer class="app-footer">
+        <span>Audiolink by MithamLabs</span>
+        <span>&bull;</span>
+        <a href="#privacy">Privacy Policy</a>
+    </footer>
+
+</div>
+
+<!-- PRIVACY POLICY VIEW (SEPARATE PAGE) -->
+<div id="privacy-view" class="app-container" style="display: none;">
+    <header class="app-header">
+        <div class="brand">
+            <div class="brand-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <h1 class="brand-title">Privacy Policy</h1>
+                </div>
+                <div style="font-size:11px; color:var(--text-tertiary); font-weight:500; line-height:1.2;">Audiolink by MithamLabs</div>
+            </div>
+        </div>
+        <a href="#" class="privacy-back-link mono" style="font-size:12px; font-weight:600;">&larr; Back</a>
+    </header>
+
+    <div class="privacy-content">
+        <p><strong style="color:var(--text-primary);">Audiolink by MithamLabs</strong> is built on a zero-knowledge peer-to-peer (P2P) architecture. We do not inspect, log, harvest, or monetize your communications.</p>
+
+        <h3>1. Direct Peer-to-Peer Media</h3>
+        <p>Voice audio streams directly between browser endpoints using WebRTC. Streams are end-to-end encrypted using DTLS-SRTP standards. No media ever routes through or is stored on MithamLabs servers.</p>
+
+        <h3>2. Ephemeral Signaling</h3>
+        <p>To connect calls, temporary handshake metadata (usernames, session descriptions, and network candidates) is briefly exchanged via the PeerJS signaling network. This signaling channel does not store conversation content or logs.</p>
+
+        <h3>3. Device Hardware & Permissions</h3>
+        <p>Microphone access is requested strictly to capture and stream outgoing voice during active calls. Hardware processing (echo cancellation and noise suppression) executes entirely locally inside your browser.</p>
+
+        <h3>4. Zero Tracking & Local Storage</h3>
+        <p>There are no tracking cookies, analytics scripts, or user profiling. Browser localStorage is used solely to remember your chosen username and UI theme preference.</p>
+    </div>
+
+    <div style="margin-top:20px;">
+        <a href="#" class="btn-primary" style="display:flex; justify-content:center; align-items:center; text-decoration:none; width:100%; text-align:center;">
+            <span>Return to Call Screen</span>
+        </a>
+    </div>
+
+    <footer class="app-footer">
+        <span>Audiolink by MithamLabs</span>
+    </footer>
 </div>
 
 <!-- Native audio element for WebRTC playback & Echo Cancellation (AEC) reference -->
@@ -1001,6 +1089,21 @@ function applyTheme(theme) {
         text.innerText = 'Light';
     }
 }
+
+/* =========================================================================
+   ROUTING (SEPARATE PRIVACY POLICY PAGE)
+   ========================================================================= */
+function handleRoute() {
+    const isPrivacy = window.location.hash === '#privacy';
+    const mainView = document.getElementById('main-view');
+    const privacyView = document.getElementById('privacy-view');
+    if (mainView && privacyView) {
+        mainView.style.display = isPrivacy ? 'none' : 'block';
+        privacyView.style.display = isPrivacy ? 'block' : 'none';
+        window.scrollTo(0, 0);
+    }
+}
+window.addEventListener('hashchange', handleRoute);
 
 /* =========================================================================
    AUDIO CONTEXT & SOUND SYSTEM (Autoplay Unlocked)
@@ -1248,7 +1351,7 @@ function setAlertTitle(alertText) {
     clearAlertTitle();
     let toggle = false;
     titleTimer = setInterval(() => {
-        document.title = toggle ? alertText : 'AudioLink — P2P Voice';
+        document.title = toggle ? alertText : 'Audiolink by MithamLabs — P2P Voice';
         toggle = !toggle;
     }, 1000);
 }
@@ -1258,7 +1361,7 @@ function clearAlertTitle() {
         clearInterval(titleTimer);
         titleTimer = null;
     }
-    document.title = 'AudioLink — Zero Latency P2P Voice';
+    document.title = 'Audiolink by MithamLabs — Zero Latency P2P Voice';
 }
 
 function requestNotificationPerm() {
@@ -1271,7 +1374,7 @@ function notifyIncomingCall(callerId) {
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
             state.incomingNotification = new Notification('Incoming Voice Call', {
-                body: `${callerId} is calling you on AudioLink.`,
+                body: `${callerId} is calling you on Audiolink by MithamLabs.`,
                 tag: 'audiolink-incoming'
             });
             state.incomingNotification.onclick = () => {
@@ -2010,7 +2113,7 @@ function updateMuteUI() {
         btn.innerText = "Mic: Muted";
         btn.classList.add('is-muted');
         btn.classList.remove('is-active');
-        document.title = '🔴 [Muted] AudioLink';
+        document.title = '🔴 [Muted] Audiolink by MithamLabs';
     } else {
         btn.innerText = "Mic: Live";
         btn.classList.remove('is-muted');
@@ -2103,7 +2206,7 @@ function updateCallTitle(timeStr) {
     if (!state.currentCall) return;
     if (state.isMuted) return;
     const target = state.currentCall.peer || 'User';
-    document.title = `🟢 [${timeStr || 'Live'}] ${target} — AudioLink`;
+    document.title = `🟢 [${timeStr || 'Live'}] ${target} — Audiolink by MithamLabs`;
 }
 
 function stopCallTimer() {
@@ -2458,6 +2561,7 @@ function checkUrlInviteParams() {
    ========================================================================= */
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
+    handleRoute();
     preloadSoundBuffers();
 
     try {
