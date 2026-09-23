@@ -817,8 +817,9 @@ kbd {
         <div id="outgoing-box" class="outgoing-card">
             <div class="outgoing-title">
                 <span class="status-dot"></span>
-                <span>Connecting to <strong id="outgoing-target-name" class="mono">---</strong></span>
+                <span><span id="outgoing-status-action">Connecting to</span> <strong id="outgoing-target-name" class="mono">---</strong>...</span>
             </div>
+            <div id="outgoing-status-subtext" style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Initializing audio & uplink...</div>
             <button id="btn-cancel-outgoing" class="btn-danger" style="padding:8px 14px; font-size:12px;">Cancel Call</button>
         </div>
 
@@ -826,8 +827,8 @@ kbd {
         <input type="text" id="peer-id" class="input-field mono" placeholder="Enter target username to call" autocomplete="off" spellcheck="false" maxlength="24">
         <div id="call-error" class="banner banner-danger"></div>
         <button id="btn-start-call" class="btn-primary">
-            <span>Establish Connection</span>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            <span id="btn-start-call-text">Establish Connection</span>
+            <svg id="btn-start-call-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
         </button>
     </section>
 
@@ -935,6 +936,7 @@ const state = {
     currentCall: null,
     incomingCallObj: null,
     audioCtx: null,
+    soundBuffers: {},
     remoteSource: null,
     localSource: null,
     localAnalyser: null,
@@ -1007,12 +1009,58 @@ function getAudioCtx() {
     return state.audioCtx;
 }
 
+async function preloadSoundBuffers() {
+    try {
+        const ctx = getAudioCtx();
+        const files = {
+            connected: 'call_connected.opus',
+            ended: 'call_ended.opus'
+        };
+        for (const [key, url] of Object.entries(files)) {
+            if (state.soundBuffers[key]) continue;
+            fetch(url)
+                .then(r => r.arrayBuffer())
+                .then(ab => ctx.decodeAudioData(ab))
+                .then(buf => { state.soundBuffers[key] = buf; })
+                .catch(() => {});
+        }
+    } catch(e) {}
+}
+
+function playInstantSound(name, fallbackElId, synthFallback) {
+    try {
+        const ctx = getAudioCtx();
+        if (ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+        }
+        if (state.soundBuffers[name]) {
+            const src = ctx.createBufferSource();
+            src.buffer = state.soundBuffers[name];
+            src.connect(ctx.destination);
+            src.start(0);
+            return;
+        }
+    } catch(e) {}
+
+    const el = document.getElementById(fallbackElId);
+    if (el) {
+        el.currentTime = 0;
+        const p = el.play();
+        if (p !== undefined) {
+            p.catch(() => synthFallback && synthFallback());
+        }
+        return;
+    }
+    if (synthFallback) synthFallback();
+}
+
 function unlockAudioContext() {
     try {
         const ctx = getAudioCtx();
         if (ctx && ctx.state === 'suspended') {
             ctx.resume().catch(() => {});
         }
+        preloadSoundBuffers();
         ['ring-audio', 'dial-audio', 'connected-audio', 'ended-audio'].forEach(id => {
             const el = document.getElementById(id);
             if (el && !el.dataset.unlocked) {
@@ -1097,16 +1145,7 @@ function playSynthRingTone(isIncoming = true) {
 }
 
 function playConnectChime() {
-    const el = document.getElementById('connected-audio');
-    if (el) {
-        el.currentTime = 0;
-        const playPromise = el.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(() => playSynthConnectChime());
-        }
-        return;
-    }
-    playSynthConnectChime();
+    playInstantSound('connected', 'connected-audio', playSynthConnectChime);
 }
 
 function playSynthConnectChime() {
@@ -1128,16 +1167,7 @@ function playSynthConnectChime() {
 }
 
 function playDisconnectTone() {
-    const el = document.getElementById('ended-audio');
-    if (el) {
-        el.currentTime = 0;
-        const playPromise = el.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(() => playSynthDisconnectTone());
-        }
-        return;
-    }
-    playSynthDisconnectTone();
+    playInstantSound('ended', 'ended-audio', playSynthDisconnectTone);
 }
 
 function playSynthDisconnectTone() {
@@ -1387,6 +1417,7 @@ async function acceptIncomingCall() {
     if (!state.incomingCallObj) return;
     const call = state.incomingCallObj;
     hideIncomingCallModal();
+    updateStatusBadge('Connecting', 'var(--cyan)');
 
     try {
         state.localStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
@@ -1428,10 +1459,14 @@ async function startCall() {
 
     hideError(errorBox);
 
+    // Immediate visual feedback so user sees "Connecting..." instantly
+    showOutgoingCallUI(target, 'connecting');
+
     try {
         state.localStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
         
-        showOutgoingCallUI(target);
+        // Microphone granted, signal peer and show "Ringing..."
+        showOutgoingCallUI(target, 'ringing');
         startRingTone(false);
 
         const call = state.peer.call(target, state.localStream);
@@ -1443,16 +1478,41 @@ async function startCall() {
     }
 }
 
-function showOutgoingCallUI(targetName) {
-    document.getElementById('outgoing-target-name').innerText = targetName;
+function showOutgoingCallUI(targetName, mode = 'connecting') {
+    const actionEl = document.getElementById('outgoing-status-action');
+    const targetEl = document.getElementById('outgoing-target-name');
+    const subtext = document.getElementById('outgoing-status-subtext');
+    const btn = document.getElementById('btn-start-call');
+    const btnText = document.getElementById('btn-start-call-text');
+    const btnIcon = document.getElementById('btn-start-call-icon');
+
+    if (actionEl) actionEl.innerText = (mode === 'ringing') ? 'Ringing' : 'Connecting to';
+    if (targetEl) targetEl.innerText = targetName;
     document.getElementById('outgoing-box').style.display = 'block';
-    document.getElementById('btn-start-call').disabled = true;
-    updateStatusBadge('Calling', 'var(--cyan)');
+
+    if (btn) btn.disabled = true;
+    if (btnIcon) btnIcon.style.display = 'none';
+
+    if (mode === 'ringing') {
+        if (subtext) subtext.innerText = `Waiting for ${targetName} to answer...`;
+        if (btnText) btnText.innerText = 'Ringing...';
+        updateStatusBadge('Ringing', 'var(--cyan)');
+    } else {
+        if (subtext) subtext.innerText = 'Initializing audio & network uplink...';
+        if (btnText) btnText.innerText = 'Connecting...';
+        updateStatusBadge('Connecting', 'var(--cyan)');
+    }
 }
 
 function cancelOutgoingCallUI() {
     document.getElementById('outgoing-box').style.display = 'none';
-    document.getElementById('btn-start-call').disabled = false;
+    const btn = document.getElementById('btn-start-call');
+    const btnText = document.getElementById('btn-start-call-text');
+    const btnIcon = document.getElementById('btn-start-call-icon');
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.innerText = 'Establish Connection';
+    if (btnIcon) btnIcon.style.display = '';
+
     stopRingTone();
     if (state.currentCall) {
         const call = state.currentCall;
@@ -1506,7 +1566,13 @@ function handleCall(call, isOutgoing = false) {
         stopRingTone();
         clearAlertTitle();
         document.getElementById('outgoing-box').style.display = 'none';
-        document.getElementById('btn-start-call').disabled = false;
+        
+        const btn = document.getElementById('btn-start-call');
+        const btnText = document.getElementById('btn-start-call-text');
+        const btnIcon = document.getElementById('btn-start-call-icon');
+        if (btn) btn.disabled = false;
+        if (btnText) btnText.innerText = 'Establish Connection';
+        if (btnIcon) btnIcon.style.display = '';
 
         document.getElementById('call-controls').style.display = 'none';
         document.getElementById('call-stage').style.display = 'block';
@@ -1523,6 +1589,18 @@ function handleCall(call, isOutgoing = false) {
         remoteAudio.muted = false;
         applyGainValue(document.getElementById('gain-slider').value);
         remoteAudio.play().catch(() => {});
+
+        // Instant hangup detection when remote peer ends their stream
+        remoteStream.getTracks().forEach(track => {
+            track.onended = () => handlePeerDisconnected("Call ended.");
+            track.onmute = () => {
+                setTimeout(() => {
+                    if (track.muted && (state.currentCall || state.callStartTime > 0)) {
+                        handlePeerDisconnected("Call ended.");
+                    }
+                }, 400);
+            };
+        });
 
         // Isolated speech detection analyser for speaking indicator (does NOT route to speakers)
         try {
@@ -1891,8 +1969,13 @@ function cleanup() {
     }
 
     if (state.localStream) {
-        state.localStream.getTracks().forEach(t => t.stop());
+        const stream = state.localStream;
         state.localStream = null;
+        // Grace period before killing tracks so disconnect chime finishes cleanly
+        // without Bluetooth audio hardware abruptly muting or changing profiles
+        setTimeout(() => {
+            stream.getTracks().forEach(t => t.stop());
+        }, 400);
     }
 
     const remoteAudio = document.getElementById('remote-audio');
@@ -1937,7 +2020,12 @@ function cleanup() {
     state.incomingCallObj = null;
 
     document.getElementById('outgoing-box').style.display = 'none';
-    document.getElementById('btn-start-call').disabled = false;
+    const btn = document.getElementById('btn-start-call');
+    const btnText = document.getElementById('btn-start-call-text');
+    const btnIcon = document.getElementById('btn-start-call-icon');
+    if (btn) btn.disabled = false;
+    if (btnText) btnText.innerText = 'Establish Connection';
+    if (btnIcon) btnIcon.style.display = '';
     document.getElementById('call-stage').style.display = 'none';
     
     if (state.peer && !state.peer.destroyed) {
@@ -2055,6 +2143,7 @@ function checkUrlInviteParams() {
    ========================================================================= */
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
+    preloadSoundBuffers();
 
     try {
         const savedUser = localStorage.getItem('audiolink_username') || localStorage.getItem('webrtc_p2p_username');
