@@ -1335,9 +1335,11 @@ function initializePeer() {
     hideError(errorBox);
     updateStatusBadge('Initializing', 'var(--warning)');
 
-    try {
-        localStorage.setItem('audiolink_username', userRaw);
-    } catch(e) {}
+    const btnInit = document.getElementById('btn-init-uplink');
+    if (btnInit) {
+        btnInit.disabled = true;
+        btnInit.innerText = "Connecting Uplink...";
+    }
 
     if (state.peer) {
         state.peer.destroy();
@@ -1356,6 +1358,16 @@ function initializePeer() {
     });
 
     state.peer.on('open', (id) => {
+        try {
+            localStorage.setItem('audiolink_username', id);
+        } catch(e) {}
+
+        const btn = document.getElementById('btn-init-uplink');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "Initialize Uplink";
+        }
+
         document.getElementById('my-id').innerText = id;
         document.getElementById('local-user-tag').innerText = id;
         document.getElementById('setup-phase').style.display = 'none';
@@ -1376,7 +1388,11 @@ function initializePeer() {
     state.peer.on('disconnected', () => {
         updateStatusBadge('Reconnecting', 'var(--warning)');
         if (state.peer && !state.peer.destroyed) {
-            state.peer.reconnect();
+            setTimeout(() => {
+                if (state.peer && !state.peer.destroyed && state.peer.disconnected) {
+                    state.peer.reconnect();
+                }
+            }, 2000);
         }
     });
 
@@ -1387,7 +1403,7 @@ function initializePeer() {
 
     // INCOMING CALL HANDLER
     state.peer.on('call', (call) => {
-        if (state.currentCall || state.outgoingTarget) {
+        if (state.currentCall || state.outgoingTarget || state.incomingCallObj) {
             sendControlSignal(call.peer, { type: 'busy' });
             try { call.close(); } catch(e) {}
             return;
@@ -1414,6 +1430,12 @@ function initializePeer() {
     });
 
     state.peer.on('error', (err) => {
+        const btn = document.getElementById('btn-init-uplink');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = "Initialize Uplink";
+        }
+
         let errorMsg = "System Error: " + err.type;
         
         if (err.type === 'peer-unavailable') {
@@ -1422,7 +1444,13 @@ function initializePeer() {
             cancelOutgoingCallUI(true);
         } else if (err.type === 'network') {
             errorMsg = "Signaling network dropped. Reconnecting...";
-            if (state.peer && !state.peer.destroyed) state.peer.reconnect();
+            if (state.peer && !state.peer.destroyed && state.peer.disconnected) {
+                setTimeout(() => {
+                    if (state.peer && !state.peer.destroyed && state.peer.disconnected) {
+                        state.peer.reconnect();
+                    }
+                }, 3000);
+            }
         } else if (err.type === 'browser-incompatible') {
             errorMsg = "Your browser does not support WebRTC audio.";
         } else if (err.type === 'unavailable-id') {
@@ -1544,20 +1572,38 @@ function setupControlConnection(target) {
 }
 
 function bindControlConnection(conn) {
-    state.controlConn = conn;
+    if (!conn) return;
+
+    // Only assign as primary control connection if we don't already have an open one with an active call peer
+    const activePeer = (state.currentCall && state.currentCall.peer) || state.outgoingTarget || (state.incomingCallObj && state.incomingCallObj.peer);
+    if (!state.controlConn || !state.controlConn.open || (activePeer && conn.peer === activePeer)) {
+        state.controlConn = conn;
+    }
+
     conn.on('data', (data) => {
-        if (!data || !data.type) return;
+        if (!data || typeof data !== 'object' || !data.type) return;
         const fromPeer = conn.peer;
-        if (data.type === 'decline') {
-            handleCallDeclined(fromPeer);
-        } else if (data.type === 'busy') {
-            handleCallBusy(fromPeer);
+
+        // Security verification: Only accept control commands from the active call participant
+        if (data.type === 'decline' || data.type === 'busy') {
+            const expected = state.outgoingTarget || (state.currentCall && state.currentCall.peer);
+            if (expected && fromPeer === expected) {
+                if (data.type === 'decline') handleCallDeclined(fromPeer);
+                else handleCallBusy(fromPeer);
+            }
         } else if (data.type === 'cancel') {
-            handleCallCancelled(fromPeer);
+            const expected = state.incomingCallObj && state.incomingCallObj.peer;
+            if (expected && fromPeer === expected) {
+                handleCallCancelled(fromPeer);
+            }
         } else if (data.type === 'end') {
-            handlePeerDisconnected("Call ended by peer.");
+            const expected = state.currentCall && state.currentCall.peer;
+            if (expected && fromPeer === expected) {
+                handlePeerDisconnected("Call ended by peer.");
+            }
         }
     });
+
     conn.on('close', () => {
         if (state.controlConn === conn) {
             state.controlConn = null;
@@ -1615,9 +1661,17 @@ function handleCallCancelled(fromPeer) {
    ========================================================================= */
 async function startCall() {
     unlockAudioContext();
+    if (state.currentCall || state.outgoingTarget) return;
+
+    const errorBox = document.getElementById('call-error');
+    if (!state.peer || state.peer.destroyed || state.peer.disconnected) {
+        showError(errorBox, "Signaling uplink is not connected. Reconnecting...");
+        if (state.peer && !state.peer.destroyed) state.peer.reconnect();
+        return;
+    }
+
     const target = document.getElementById('peer-id').value.trim();
     const localId = document.getElementById('my-id').innerText.trim();
-    const errorBox = document.getElementById('call-error');
 
     if (!isValidUsername(target)) {
         showError(errorBox, "Target username must be 3-24 characters (alphanumeric, -, _).");
@@ -1849,9 +1903,12 @@ function handleCall(call, isOutgoing = false) {
 }
 
 function handlePeerDisconnected(msg) {
-    if (state.currentCall || state.callStartTime > 0) {
+    if (state.callStartTime > 0) {
         playDisconnectTone();
         showInfoBanner(msg || "Call ended.");
+    } else if (state.currentCall || state.outgoingTarget) {
+        playFailedTone();
+        showInfoBanner(msg || "Connection could not be established.");
     }
     cleanup();
 }
@@ -2301,13 +2358,16 @@ function hideError(element) {
     element.style.display = 'none';
 }
 
+let infoBannerTimeout = null;
 function showInfoBanner(msg, duration = 4000) {
     const banner = document.getElementById('global-info');
     if (!banner) return;
     banner.innerText = msg;
     banner.style.display = 'block';
-    setTimeout(() => {
+    if (infoBannerTimeout) clearTimeout(infoBannerTimeout);
+    infoBannerTimeout = setTimeout(() => {
         banner.style.display = 'none';
+        infoBannerTimeout = null;
     }, duration);
 }
 
@@ -2341,8 +2401,8 @@ function fallbackCopy(text, cb) {
     document.body.appendChild(ta);
     ta.select();
     try {
-        document.execCommand('copy');
-        if (cb) cb();
+        const successful = document.execCommand('copy');
+        if (successful && cb) cb();
     } catch(e) {}
     document.body.removeChild(ta);
 }
@@ -2367,6 +2427,11 @@ function checkUrlInviteParams() {
     const targetPeer = params.get('call') || params.get('join');
     if (targetPeer) {
         const cleanTarget = targetPeer.trim();
+        if (!isValidUsername(cleanTarget)) return;
+
+        const localId = (state.peer && state.peer.id) || '';
+        if (localId && cleanTarget.toLowerCase() === localId.toLowerCase()) return;
+
         const peerInput = document.getElementById('peer-id');
         if (peerInput) peerInput.value = cleanTarget;
         
@@ -2418,8 +2483,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-ec').addEventListener('click', toggleEC);
     document.getElementById('btn-end-call').addEventListener('click', endCall);
 
-    // Global click listener to unlock Web Audio context on any user interaction
-    document.addEventListener('click', unlockAudioContext, { once: true });
+    // Global interaction listener to unlock Web Audio context on any user interaction (touch/click/key)
+    ['click', 'touchstart', 'keydown'].forEach(evt => {
+        document.addEventListener(evt, unlockAudioContext, { once: true, passive: true });
+    });
 
     // Keyboard bindings
     window.addEventListener('keydown', (e) => {
