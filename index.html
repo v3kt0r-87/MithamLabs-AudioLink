@@ -1143,30 +1143,42 @@ async function preloadSoundBuffers() {
 }
 
 function playInstantSound(name, fallbackElId, synthFallback) {
-    try {
-        const ctx = getAudioCtx();
-        if (ctx.state === 'suspended') {
-            ctx.resume().catch(() => {});
-        }
+    const playBuffer = (ctx) => {
         if (state.soundBuffers[name]) {
             const src = ctx.createBufferSource();
             src.buffer = state.soundBuffers[name];
             src.connect(ctx.destination);
             src.start(0);
+            return true;
+        }
+        return false;
+    };
+
+    const playFallback = () => {
+        const el = document.getElementById(fallbackElId);
+        if (el) {
+            el.currentTime = 0;
+            const p = el.play();
+            if (p !== undefined) {
+                p.catch(() => synthFallback && synthFallback());
+            }
             return;
         }
+        if (synthFallback) synthFallback();
+    };
+
+    try {
+        const ctx = getAudioCtx();
+        if (ctx.state === 'suspended') {
+            ctx.resume().then(() => {
+                if (!playBuffer(ctx)) playFallback();
+            }).catch(playFallback);
+            return;
+        }
+        if (playBuffer(ctx)) return;
     } catch(e) {}
 
-    const el = document.getElementById(fallbackElId);
-    if (el) {
-        el.currentTime = 0;
-        const p = el.play();
-        if (p !== undefined) {
-            p.catch(() => synthFallback && synthFallback());
-        }
-        return;
-    }
-    if (synthFallback) synthFallback();
+    playFallback();
 }
 
 function unlockAudioContext() {
@@ -1405,6 +1417,12 @@ async function acquireWakeLock() {
     }
 }
 
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.currentCall && !state.wakeLock) {
+        acquireWakeLock();
+    }
+});
+
 function releaseWakeLock() {
     if (state.wakeLock) {
         state.wakeLock.release().catch(() => {});
@@ -1433,6 +1451,7 @@ function bindLocalStreamTracks(stream) {
                     const fallbackStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
                     const newTrack = fallbackStream.getAudioTracks()[0];
                     if (newTrack && state.currentCall && state.currentCall.peerConnection) {
+                        newTrack.enabled = !state.isMuted;
                         const senders = state.currentCall.peerConnection.getSenders();
                         const audioSender = senders.find(s => s.track && s.track.kind === 'audio') || senders[0];
                         if (audioSender) await audioSender.replaceTrack(newTrack);
@@ -1467,7 +1486,7 @@ function initializePeer() {
     unlockAudioContext();
     requestNotificationPerm();
 
-    const userRaw = document.getElementById('username-input').value.trim();
+    const userRaw = document.getElementById('username-input').value.trim().toLowerCase();
     const errorBox = document.getElementById('setup-error');
 
     if (!isValidUsername(userRaw)) {
@@ -1495,7 +1514,10 @@ function initializePeer() {
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:global.stun.twilio.com:3478' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+                { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
             ]
         }
     });
@@ -1547,6 +1569,25 @@ function initializePeer() {
 
     // INCOMING CALL HANDLER
     state.peer.on('call', (call) => {
+        // Resolve WebRTC Call Glare: simultaneous mutual calling
+        const isGlare = state.outgoingTarget && state.outgoingTarget.toLowerCase() === call.peer.toLowerCase();
+        if (isGlare) {
+            const isPolite = ((state.peer && state.peer.id) || '').localeCompare(call.peer) > 0;
+            if (isPolite) {
+                // Polite peer yields outgoing call and answers incoming call immediately
+                cancelOutgoingCallUI(true);
+                if (state.localStream) {
+                    call.answer(state.localStream);
+                    handleCall(call);
+                    return;
+                }
+            } else {
+                // Impolite peer drops incoming duplicate and lets outgoing call finish
+                try { call.close(); } catch(e) {}
+                return;
+            }
+        }
+
         if (state.currentCall || state.outgoingTarget || state.incomingCallObj) {
             sendControlSignal(call.peer, { type: 'busy' });
             try { call.close(); } catch(e) {}
@@ -1688,21 +1729,31 @@ function sendControlSignal(target, payload) {
                    state.controlConn.peerConnection.connectionState === 'failed')) {
             state.controlConn = null;
         } else {
-            state.controlConn.on('open', () => {
+            const sendOnce = () => {
                 try { state.controlConn.send(payload); } catch(e) {}
-            });
+            };
+            if (typeof state.controlConn.once === 'function') {
+                state.controlConn.once('open', sendOnce);
+            } else {
+                state.controlConn.on('open', sendOnce);
+            }
             return;
         }
     }
 
     try {
         const conn = state.peer.connect(target, { reliable: true });
-        conn.on('open', () => {
+        const onOpen = () => {
             try { conn.send(payload); } catch(e) {}
             setTimeout(() => {
                 try { conn.close(); } catch(e) {}
             }, 1000);
-        });
+        };
+        if (typeof conn.once === 'function') {
+            conn.once('open', onOpen);
+        } else {
+            conn.on('open', onOpen);
+        }
     } catch(e) {}
 }
 
@@ -1816,15 +1867,15 @@ async function startCall() {
         return;
     }
 
-    const target = document.getElementById('peer-id').value.trim();
-    const localId = document.getElementById('my-id').innerText.trim();
+    const target = document.getElementById('peer-id').value.trim().toLowerCase();
+    const localId = document.getElementById('my-id').innerText.trim().toLowerCase();
 
     if (!isValidUsername(target)) {
         showError(errorBox, "Target username must be 3-24 characters (alphanumeric, -, _).");
         return;
     }
 
-    if (target.toLowerCase() === localId.toLowerCase()) {
+    if (target === localId) {
         showError(errorBox, "Cannot connect to your own username.");
         return;
     }
@@ -1843,9 +1894,10 @@ async function startCall() {
     if (state.callTimeout) clearTimeout(state.callTimeout);
     state.callTimeout = setTimeout(() => {
         if (!state.currentCall || !state.callStartTime) {
-            cancelOutgoingCallUI(false);
+            cancelOutgoingCallUI(true);
             playFailedTone();
             showError(errorBox, `No answer from ${target}.`);
+            showInfoBanner(`No answer from ${target}.`);
         }
     }, 40000);
 
@@ -2161,20 +2213,42 @@ function updateMuteUI() {
     }
 }
 
+function updateNSUI() {
+    const btn = document.getElementById('btn-ns');
+    if (btn) {
+        btn.innerText = `Noise Suppress: ${state.isNsOn ? 'On' : 'Off'}`;
+        btn.className = state.isNsOn ? 'toggle-btn is-active' : 'toggle-btn';
+    }
+}
+
+function updateECUI() {
+    const btn = document.getElementById('btn-ec');
+    if (btn) {
+        btn.innerText = `Echo Cancel: ${state.isEcOn ? 'On' : 'Off'}`;
+        btn.className = state.isEcOn ? 'toggle-btn is-active' : 'toggle-btn';
+    }
+}
+
 async function toggleNS() {
     state.isNsOn = !state.isNsOn;
-    const btn = document.getElementById('btn-ns');
-    btn.innerText = `Noise Suppress: ${state.isNsOn ? 'On' : 'Off'}`;
-    btn.className = state.isNsOn ? 'toggle-btn is-active' : 'toggle-btn';
-    await applyAudioConstraints();
+    updateNSUI();
+    const ok = await applyAudioConstraints();
+    if (!ok) {
+        state.isNsOn = !state.isNsOn;
+        updateNSUI();
+        showInfoBanner("Hardware noise suppression not supported by browser.");
+    }
 }
 
 async function toggleEC() {
     state.isEcOn = !state.isEcOn;
-    const btn = document.getElementById('btn-ec');
-    btn.innerText = `Echo Cancel: ${state.isEcOn ? 'On' : 'Off'}`;
-    btn.className = state.isEcOn ? 'toggle-btn is-active' : 'toggle-btn';
-    await applyAudioConstraints();
+    updateECUI();
+    const ok = await applyAudioConstraints();
+    if (!ok) {
+        state.isEcOn = !state.isEcOn;
+        updateECUI();
+        showInfoBanner("Hardware echo cancellation not supported by browser.");
+    }
 }
 
 async function applyAudioConstraints() {
@@ -2189,11 +2263,14 @@ async function applyAudioConstraints() {
                     noiseSuppression: state.isNsOn,
                     echoCancellation: state.isEcOn
                 });
+                return true;
             } catch(err) {
                 console.warn("Hardware audio constraint error:", err);
+                return false;
             }
         }
     }
+    return true;
 }
 
 function resetControlButtons() {
@@ -2359,7 +2436,7 @@ function extractNetworkInfo(stats, hasRtt) {
 
         if (localCandidate) {
             const localIP = localCandidate.address || localCandidate.ip || "[Masked]";
-            document.getElementById("local-ip").innerText = localIP;
+            document.getElementById("local-ip").innerText = maskIP(localIP);
 
             const netTypeEl = document.getElementById("network-type");
             if (localCandidate.candidateType === 'relay') {
@@ -2377,9 +2454,23 @@ function extractNetworkInfo(stats, hasRtt) {
         
         if (remoteCandidate) {
             const remoteIP = remoteCandidate.address || remoteCandidate.ip || "---";
-            document.getElementById("remote-ip").innerText = remoteIP;
+            document.getElementById("remote-ip").innerText = maskIP(remoteIP);
         }
     }
+}
+
+function maskIP(ip) {
+    if (!ip || ip === '---' || ip === '[Masked]') return ip;
+    if (ip.endsWith('.local')) return 'LAN (mDNS)';
+    if (ip.includes('.')) {
+        const parts = ip.split('.');
+        if (parts.length === 4) return `${parts[0]}.${parts[1]}.*.*`;
+    }
+    if (ip.includes(':')) {
+        const parts = ip.split(':');
+        return parts.slice(0, 2).join(':') + ':****';
+    }
+    return ip;
 }
 
 /* =========================================================================
@@ -2558,11 +2649,11 @@ function checkUrlInviteParams() {
     const params = new URLSearchParams(window.location.search);
     const targetPeer = params.get('call') || params.get('join');
     if (targetPeer) {
-        const cleanTarget = targetPeer.trim();
+        const cleanTarget = targetPeer.trim().toLowerCase();
         if (!isValidUsername(cleanTarget)) return;
 
-        const localId = (state.peer && state.peer.id) || '';
-        if (localId && cleanTarget.toLowerCase() === localId.toLowerCase()) return;
+        const localId = ((state.peer && state.peer.id) || '').toLowerCase();
+        if (localId && cleanTarget === localId) return;
 
         const peerInput = document.getElementById('peer-id');
         if (peerInput) peerInput.value = cleanTarget;
@@ -2582,6 +2673,10 @@ function checkUrlInviteParams() {
             btnInit.textContent = `Connect to ${cleanTarget} as "${savedUser}"`;
             state.autoCallTarget = cleanTarget;
         }
+
+        try {
+            window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+        } catch(e) {}
     }
 }
 
