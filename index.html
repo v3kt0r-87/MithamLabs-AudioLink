@@ -1509,12 +1509,13 @@ function initializePeer() {
 
     state.peer = new Peer(userRaw, {
         config: {
+            iceCandidatePoolSize: 2,
             iceServers: [
                 { urls: 'stun:stun.cloudflare.com:3478' },
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:global.stun.twilio.com:3478' },
                 { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
                 { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
                 { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
@@ -1994,10 +1995,63 @@ function cancelOutgoingCallUI(skipSignal = false) {
 /* =========================================================================
    HANDLE ACTIVE CALL & WEBRTC PIPELINE
    ========================================================================= */
+function boostIPv6Priority(pc) {
+    if (!pc || pc._ipv6Boosted) return;
+    pc._ipv6Boosted = true;
+
+    // Boost IPv6 candidates in local Session Descriptions (Offers / Answers)
+    const origSetLocalDescription = pc.setLocalDescription;
+    pc.setLocalDescription = async function(desc) {
+        if (desc && desc.sdp) {
+            try {
+                const lines = desc.sdp.split('\r\n');
+                const boosted = lines.map(line => {
+                    if (line.startsWith('a=candidate:')) {
+                        const parts = line.split(' ');
+                        // parts[4] is the IP address
+                        if (parts.length > 4 && parts[4].includes(':')) {
+                            // Give IPv6 candidates the highest priority in ICE checklist
+                            parts[3] = "2147483640";
+                            return parts.join(' ');
+                        }
+                    }
+                    return line;
+                });
+                desc = new RTCSessionDescription({
+                    type: desc.type,
+                    sdp: boosted.join('\r\n')
+                });
+            } catch(e) {}
+        }
+        return origSetLocalDescription.apply(this, arguments);
+    };
+
+    // Boost IPv6 candidates in incoming trickle ICE candidates
+    const origAddIceCandidate = pc.addIceCandidate;
+    pc.addIceCandidate = async function(candidate, ...args) {
+        if (candidate && candidate.candidate && candidate.candidate.startsWith('candidate:')) {
+            const parts = candidate.candidate.split(' ');
+            if (parts.length > 4 && parts[4].includes(':')) {
+                parts[3] = "2147483640";
+                try {
+                    candidate = new RTCIceCandidate({
+                        candidate: parts.join(' '),
+                        sdpMid: candidate.sdpMid,
+                        sdpMLineIndex: candidate.sdpMLineIndex,
+                        usernameFragment: candidate.usernameFragment
+                    });
+                } catch(e) {}
+            }
+        }
+        return origAddIceCandidate.apply(this, [candidate, ...args]);
+    };
+}
+
 function handleCall(call, isOutgoing = false) {
     state.currentCall = call;
 
     if (call.peerConnection) {
+        boostIPv6Priority(call.peerConnection);
         call.peerConnection.oniceconnectionstatechange = () => {
             const iceState = call.peerConnection.iceConnectionState;
             
