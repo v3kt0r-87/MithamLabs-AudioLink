@@ -1415,6 +1415,43 @@ function releaseWakeLock() {
 /* =========================================================================
    PEER INITIALIZATION & SIGNALING RECONNECTION WATCHDOG
    ========================================================================= */
+function setUIPhase(phase) {
+    const setup = document.getElementById('setup-phase');
+    const controls = document.getElementById('call-controls');
+    const stage = document.getElementById('call-stage');
+    if (setup) setup.style.display = (phase === 'setup') ? 'block' : 'none';
+    if (controls) controls.style.display = (phase === 'lobby') ? 'block' : 'none';
+    if (stage) stage.style.display = (phase === 'call') ? 'block' : 'none';
+}
+
+function bindLocalStreamTracks(stream) {
+    if (!stream) return;
+    stream.getAudioTracks().forEach(track => {
+        track.onended = async () => {
+            if (state.currentCall) {
+                try {
+                    const fallbackStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
+                    const newTrack = fallbackStream.getAudioTracks()[0];
+                    if (newTrack && state.currentCall && state.currentCall.peerConnection) {
+                        const senders = state.currentCall.peerConnection.getSenders();
+                        const audioSender = senders.find(s => s.track && s.track.kind === 'audio') || senders[0];
+                        if (audioSender) await audioSender.replaceTrack(newTrack);
+                        if (state.localStream) {
+                            state.localStream.getTracks().forEach(t => { if (t !== newTrack) t.stop(); });
+                        }
+                        state.localStream = fallbackStream;
+                        bindLocalStreamTracks(fallbackStream);
+                        setupMeter(fallbackStream);
+                        showInfoBanner("Microphone switched to backup device.");
+                        return;
+                    }
+                } catch(err) {}
+                handlePeerDisconnected("Microphone disconnected.");
+            }
+        };
+    });
+}
+
 function updateStatusBadge(text, color) {
     const statusText = document.getElementById('system-status-text');
     const statusDot = document.getElementById('system-status');
@@ -1476,9 +1513,10 @@ function initializePeer() {
 
         document.getElementById('my-id').innerText = id;
         document.getElementById('local-user-tag').innerText = id;
-        document.getElementById('setup-phase').style.display = 'none';
-        document.getElementById('call-controls').style.display = 'block';
-        updateStatusBadge('Online', 'var(--brand)');
+        if (!state.currentCall) {
+            setUIPhase('lobby');
+            updateStatusBadge('Online', 'var(--brand)');
+        }
         
         checkUrlInviteParams();
 
@@ -1561,8 +1599,7 @@ function initializePeer() {
             errorMsg = "Your browser does not support WebRTC audio.";
         } else if (err.type === 'unavailable-id') {
             errorMsg = "This username is already taken. Please choose another.";
-            document.getElementById('setup-phase').style.display = 'block';
-            document.getElementById('call-controls').style.display = 'none';
+            setUIPhase('setup');
         }
 
         const isSetup = document.getElementById('setup-phase').style.display !== 'none';
@@ -1612,10 +1649,13 @@ async function acceptIncomingCall() {
 
     try {
         state.localStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
+        bindLocalStreamTracks(state.localStream);
         call.answer(state.localStream);
         handleCall(call);
     } catch(e) {
-        showError(document.getElementById('call-error'), "Microphone permission denied. Allow mic access in browser settings.");
+        showError(document.getElementById('call-error'), "Microphone unavailable or permission denied.");
+        sendControlSignal(call.peer, { type: 'decline' });
+        try { call.close(); } catch(err) {}
         cleanup();
     }
 }
@@ -1811,6 +1851,7 @@ async function startCall() {
 
     try {
         state.localStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
+        bindLocalStreamTracks(state.localStream);
         
         // Check if call was cancelled while mic prompt was pending
         if (!state.outgoingTarget || document.getElementById('outgoing-box').style.display === 'none') {
@@ -1829,7 +1870,7 @@ async function startCall() {
         state.currentCall = call;
         handleCall(call, true);
     } catch(e) {
-        showError(errorBox, "Microphone permission denied. Allow mic access in browser settings.");
+        showError(errorBox, "Microphone unavailable or permission denied.");
         cancelOutgoingCallUI(true);
     }
 }
@@ -1956,8 +1997,7 @@ function handleCall(call, isOutgoing = false) {
         if (btnText) btnText.innerText = 'Establish Connection';
         if (btnIcon) btnIcon.style.display = '';
 
-        document.getElementById('call-controls').style.display = 'none';
-        document.getElementById('call-stage').style.display = 'block';
+        setUIPhase('call');
         
         document.getElementById('remote-user-tag').innerText = call.peer;
         
@@ -1975,13 +2015,6 @@ function handleCall(call, isOutgoing = false) {
         // Instant hangup detection when remote peer ends their stream
         remoteStream.getTracks().forEach(track => {
             track.onended = () => handlePeerDisconnected("Call ended.");
-            track.onmute = () => {
-                setTimeout(() => {
-                    if (track.muted && (state.currentCall || state.callStartTime > 0)) {
-                        handlePeerDisconnected("Call ended.");
-                    }
-                }, 400);
-            };
         });
 
         // Isolated speech detection analyser for speaking indicator (does NOT route to speakers)
@@ -2009,6 +2042,9 @@ function handleCall(call, isOutgoing = false) {
 }
 
 function handlePeerDisconnected(msg) {
+    if (state.currentCall) {
+        sendControlSignal(state.currentCall.peer, { type: 'end' });
+    }
     if (state.callStartTime > 0) {
         playDisconnectTone();
         showInfoBanner(msg || "Call ended.");
@@ -2400,22 +2436,10 @@ function cleanup() {
 
     stopCallTimer();
 
-    if (state.localSource) {
-        state.localSource.disconnect();
-        state.localSource = null;
-    }
-    if (state.remoteSource) {
-        state.remoteSource.disconnect();
-        state.remoteSource = null;
-    }
-    if (state.localAnalyser) {
-        state.localAnalyser.disconnect();
-        state.localAnalyser = null;
-    }
-    if (state.remoteAnalyser) {
-        state.remoteAnalyser.disconnect();
-        state.remoteAnalyser = null;
-    }
+    try { if (state.localSource) { state.localSource.disconnect(); state.localSource = null; } } catch(e) {}
+    try { if (state.remoteSource) { state.remoteSource.disconnect(); state.remoteSource = null; } } catch(e) {}
+    try { if (state.localAnalyser) { state.localAnalyser.disconnect(); state.localAnalyser = null; } } catch(e) {}
+    try { if (state.remoteAnalyser) { state.remoteAnalyser.disconnect(); state.remoteAnalyser = null; } } catch(e) {}
 
     document.getElementById('mic-db-level').innerText = '-- dB';
     document.getElementById('lat-avg').innerText = '--';
@@ -2425,7 +2449,11 @@ function cleanup() {
     document.getElementById('local-ip').innerText = '---';
     document.getElementById('remote-ip').innerText = '---';
 
-    state.currentCall = null;
+    if (state.currentCall) {
+        const c = state.currentCall;
+        state.currentCall = null;
+        try { c.close(); } catch(e) {}
+    }
     state.incomingCallObj = null;
     if (state.controlConn) {
         try { state.controlConn.close(); } catch(e) {}
@@ -2439,13 +2467,11 @@ function cleanup() {
     if (btn) btn.disabled = false;
     if (btnText) btnText.innerText = 'Establish Connection';
     if (btnIcon) btnIcon.style.display = '';
-    document.getElementById('call-stage').style.display = 'none';
     
+    setUIPhase(state.peer && !state.peer.destroyed ? 'lobby' : 'setup');
     if (state.peer && !state.peer.destroyed) {
-        document.getElementById('call-controls').style.display = 'block';
         updateStatusBadge('Online', 'var(--brand)');
     } else {
-        document.getElementById('setup-phase').style.display = 'block';
         updateStatusBadge('Standby', 'var(--text-muted)');
     }
 }
@@ -2594,6 +2620,19 @@ document.addEventListener('DOMContentLoaded', () => {
     ['click', 'touchstart', 'keydown'].forEach(evt => {
         document.addEventListener(evt, unlockAudioContext, { once: true, passive: true });
     });
+
+    // Hardware device change handler (headphone unplug / DAC switch / BT profile change)
+    if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+        navigator.mediaDevices.addEventListener('devicechange', () => {
+            const remoteAudio = document.getElementById('remote-audio');
+            if (remoteAudio && remoteAudio.srcObject) {
+                remoteAudio.play().catch(() => {});
+            }
+            if (state.audioCtx && state.audioCtx.state === 'suspended') {
+                state.audioCtx.resume().catch(() => {});
+            }
+        });
+    }
 
     // Keyboard bindings
     window.addEventListener('keydown', (e) => {
