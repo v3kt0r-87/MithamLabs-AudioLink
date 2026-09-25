@@ -2621,16 +2621,8 @@ function cleanup() {
 /* =========================================================================
    UI UTILITIES & CLIPBOARD
    ========================================================================= */
-function showError(element, msg) {
-    if (!element) return;
-    element.innerText = msg;
-    element.style.display = 'block';
-}
-
-function hideError(element) {
-    if (!element) return;
-    element.style.display = 'none';
-}
+const showError = (el, msg) => { if (el) { el.innerText = msg; el.style.display = 'block'; } };
+const hideError = el => { if (el) el.style.display = 'none'; };
 
 let infoBannerTimeout = null;
 function showInfoBanner(msg, duration = 4000) {
@@ -2646,9 +2638,8 @@ function showInfoBanner(msg, duration = 4000) {
 }
 
 function copyToClipboard(text, btnElement, successMsg) {
-    if (!text || text === '---') return;
-    
-    const finish = () => {
+    if (!text || text === '---' || !navigator.clipboard) return;
+    navigator.clipboard.writeText(text).then(() => {
         const originalContent = btnElement.innerHTML;
         btnElement.innerHTML = `<span>${successMsg}</span>`;
         btnElement.style.color = "var(--brand)";
@@ -2658,27 +2649,7 @@ function copyToClipboard(text, btnElement, successMsg) {
             btnElement.style.color = "";
             btnElement.style.borderColor = "";
         }, 2000);
-    };
-
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(finish).catch(() => fallbackCopy(text, finish));
-    } else {
-        fallbackCopy(text, finish);
-    }
-}
-
-function fallbackCopy(text, cb) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-        const successful = document.execCommand('copy');
-        if (successful && cb) cb();
-    } catch(e) {}
-    document.body.removeChild(ta);
+    }).catch(() => {});
 }
 
 function copyID() {
@@ -2718,7 +2689,7 @@ function checkUrlInviteParams() {
             banner.style.display = 'flex';
         }
 
-        const savedUser = localStorage.getItem('audiolink_username') || localStorage.getItem('webrtc_p2p_username');
+        const savedUser = localStorage.getItem('audiolink_username');
         if (savedUser && !state.peer) {
             const btnInit = document.getElementById('btn-init-uplink');
             btnInit.textContent = `Connect to ${cleanTarget} as "${savedUser}"`;
@@ -2742,7 +2713,7 @@ document.addEventListener('DOMContentLoaded', () => {
     preloadSoundBuffers();
 
     try {
-        const savedUser = localStorage.getItem('audiolink_username') || localStorage.getItem('webrtc_p2p_username');
+        const savedUser = localStorage.getItem('audiolink_username');
         if (savedUser) {
             document.getElementById('username-input').value = savedUser;
         }
