@@ -1011,11 +1011,11 @@ kbd {
 <!-- Native audio element for WebRTC playback & Echo Cancellation (AEC) reference -->
 <audio id="remote-audio" autoplay playsinline></audio>
 <!-- Sound effect audio elements -->
-<audio id="ring-audio" src="call_ring.opus" preload="auto" loop></audio>
-<audio id="dial-audio" src="call_dail.opus" preload="auto" loop></audio>
-<audio id="connected-audio" src="call_connected.opus" preload="auto"></audio>
-<audio id="ended-audio" src="call_ended.opus" preload="auto"></audio>
-<audio id="failed-audio" src="call_failed.opus" preload="auto"></audio>
+<audio id="ring-audio" src="audio/ring.opus" preload="auto" loop></audio>
+<audio id="dial-audio" src="audio/dial.opus" preload="auto" loop></audio>
+<audio id="connected-audio" src="audio/connected.opus" preload="auto"></audio>
+<audio id="ended-audio" src="audio/ended.opus" preload="auto"></audio>
+<audio id="failed-audio" src="audio/failed.opus" preload="auto"></audio>
 
 
 <script>
@@ -1125,11 +1125,11 @@ async function preloadSoundBuffers() {
     try {
         const ctx = getAudioCtx();
         const files = {
-            ring: 'call_ring.opus',
-            dial: 'call_dail.opus',
-            connected: 'call_connected.opus',
-            ended: 'call_ended.opus',
-            failed: 'call_failed.opus'
+            ring: 'audio/ring.opus',
+            dial: 'audio/dial.opus',
+            connected: 'audio/connected.opus',
+            ended: 'audio/ended.opus',
+            failed: 'audio/failed.opus'
         };
         for (const [key, url] of Object.entries(files)) {
             if (state.soundBuffers[key]) continue;
