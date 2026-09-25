@@ -1539,6 +1539,8 @@ function initializePeer() {
         if (!state.currentCall) {
             setUIPhase('lobby');
             updateStatusBadge('Online', 'var(--brand)');
+        } else {
+            updateStatusBadge('Active', 'var(--brand)');
         }
         
         checkUrlInviteParams();
@@ -1576,7 +1578,7 @@ function initializePeer() {
             const isPolite = ((state.peer && state.peer.id) || '').localeCompare(call.peer) > 0;
             if (isPolite) {
                 // Polite peer yields outgoing call and answers incoming call immediately
-                cancelOutgoingCallUI(true);
+                cancelOutgoingCallUI(true, true);
                 if (state.localStream) {
                     call.answer(state.localStream);
                     handleCall(call);
@@ -1955,7 +1957,7 @@ function showOutgoingCallUI(targetName, mode = 'connecting') {
     }
 }
 
-function cancelOutgoingCallUI(skipSignal = false) {
+function cancelOutgoingCallUI(skipSignal = false, preserveMedia = false) {
     const shouldSkip = (skipSignal === true);
     document.getElementById('outgoing-box').style.display = 'none';
     const btn = document.getElementById('btn-start-call');
@@ -1979,7 +1981,7 @@ function cancelOutgoingCallUI(skipSignal = false) {
         showInfoBanner("Call cancelled.");
     }
 
-    if (state.localStream) {
+    if (!preserveMedia && state.localStream) {
         state.localStream.getTracks().forEach(t => t.stop());
         state.localStream = null;
     }
@@ -2589,6 +2591,7 @@ function cleanup() {
     document.getElementById('remote-ip').innerText = '---';
 
     state.incomingCallObj = null;
+    state.isMuted = false;
     if (state.currentCall) {
         const c = state.currentCall;
         state.currentCall = null;
@@ -2719,6 +2722,8 @@ function checkUrlInviteParams() {
         if (savedUser && !state.peer) {
             const btnInit = document.getElementById('btn-init-uplink');
             btnInit.textContent = `Connect to ${cleanTarget} as "${savedUser}"`;
+            state.autoCallTarget = cleanTarget;
+        } else if (!state.peer) {
             state.autoCallTarget = cleanTarget;
         }
 
