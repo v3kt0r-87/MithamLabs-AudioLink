@@ -2498,7 +2498,7 @@ function extractNetworkInfo(stats, hasRtt) {
                 netTypeEl.innerText = "Relay (TURN)";
             } else if (localIP.endsWith(".local")) {
                 netTypeEl.innerText = "LAN (mDNS)";
-            } else if (localIP.startsWith("172.") || localIP.startsWith("10.") || localIP.startsWith("192.168") || localIP.startsWith("fd") || localIP.startsWith("fc")) {
+            } else if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|f[cd])/.test(localIP)) {
                 netTypeEl.innerText = "LAN / Private";
             } else if (localIP.includes(":")) {
                 netTypeEl.innerText = "IPv6 Direct";
