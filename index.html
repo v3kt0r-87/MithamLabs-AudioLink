@@ -861,7 +861,10 @@ kbd {
             <button id="btn-cancel-outgoing" class="btn-danger" style="padding:8px 14px; font-size:12px;">Cancel Call</button>
         </div>
 
-        <label for="peer-id" class="section-label">Call a Peer</label>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <label for="peer-id" class="section-label" style="margin-bottom:0;">Call a Peer</label>
+            <button type="button" id="btn-ipv6-toggle" class="toggle-btn" style="padding:3px 8px; font-size:11px;" title="Enforce IPv6 Only (no IPv4 fallback)">IPv6 Only: Off</button>
+        </div>
         <input type="text" id="peer-id" class="input-field mono" placeholder="Enter target username to call" autocomplete="off" spellcheck="false" maxlength="24">
         <div id="call-error" class="banner banner-danger"></div>
         <button id="btn-start-call" class="btn-primary">
@@ -1044,6 +1047,7 @@ const state = {
     isNsOn: true,
     isEcOn: true,
     isMuted: false,
+    forceIPv6: false,
     ringInterval: null,
     iceDisconnectTimeout: null,
     wakeLock: null,
@@ -2002,18 +2006,23 @@ function boostIPv6Priority(pc) {
     if (!pc || pc._ipv6Boosted) return;
     pc._ipv6Boosted = true;
 
-    // Boost IPv6 candidates in local Session Descriptions (Offers / Answers)
+    // Filter or boost in local Session Descriptions (Offers / Answers)
     const origSetLocalDescription = pc.setLocalDescription;
     pc.setLocalDescription = async function(desc) {
         if (desc && desc.sdp) {
             try {
-                const lines = desc.sdp.split('\r\n');
+                let lines = desc.sdp.split('\r\n');
+                if (state.forceIPv6) {
+                    lines = lines.filter(line => {
+                        if (!line.startsWith('a=candidate:')) return true;
+                        const parts = line.split(' ');
+                        return parts.length > 4 && parts[4].includes(':');
+                    });
+                }
                 const boosted = lines.map(line => {
                     if (line.startsWith('a=candidate:')) {
                         const parts = line.split(' ');
-                        // parts[4] is the IP address
                         if (parts.length > 4 && parts[4].includes(':')) {
-                            // Give IPv6 candidates the highest priority in ICE checklist
                             parts[3] = "2147483640";
                             return parts.join(' ');
                         }
@@ -2029,25 +2038,67 @@ function boostIPv6Priority(pc) {
         return origSetLocalDescription.apply(this, arguments);
     };
 
-    // Boost IPv6 candidates in incoming trickle ICE candidates
+    // Filter remote descriptions if forcing IPv6
+    const origSetRemoteDescription = pc.setRemoteDescription;
+    pc.setRemoteDescription = async function(desc) {
+        if (state.forceIPv6 && desc && desc.sdp) {
+            try {
+                const filtered = desc.sdp.split('\r\n').filter(line => {
+                    if (!line.startsWith('a=candidate:')) return true;
+                    const parts = line.split(' ');
+                    return parts.length > 4 && parts[4].includes(':');
+                });
+                desc = new RTCSessionDescription({
+                    type: desc.type,
+                    sdp: filtered.join('\r\n')
+                });
+            } catch(e) {}
+        }
+        return origSetRemoteDescription.apply(this, arguments);
+    };
+
+    // Filter/boost incoming trickle ICE candidates
     const origAddIceCandidate = pc.addIceCandidate;
     pc.addIceCandidate = async function(candidate, ...args) {
         if (candidate && candidate.candidate && candidate.candidate.startsWith('candidate:')) {
             const parts = candidate.candidate.split(' ');
-            if (parts.length > 4 && parts[4].includes(':')) {
-                parts[3] = "2147483640";
-                try {
-                    candidate = new RTCIceCandidate({
-                        candidate: parts.join(' '),
-                        sdpMid: candidate.sdpMid,
-                        sdpMLineIndex: candidate.sdpMLineIndex,
-                        usernameFragment: candidate.usernameFragment
-                    });
-                } catch(e) {}
+            if (parts.length > 4) {
+                if (state.forceIPv6 && !parts[4].includes(':')) {
+                    return; // Drop remote IPv4 candidate
+                }
+                if (parts[4].includes(':')) {
+                    parts[3] = "2147483640";
+                    try {
+                        candidate = new RTCIceCandidate({
+                            candidate: parts.join(' '),
+                            sdpMid: candidate.sdpMid,
+                            sdpMLineIndex: candidate.sdpMLineIndex,
+                            usernameFragment: candidate.usernameFragment
+                        });
+                    } catch(e) {}
+                }
             }
         }
         return origAddIceCandidate.apply(this, [candidate, ...args]);
     };
+
+    // Intercept outgoing candidates sent to signaling
+    let curOnIce = pc.onicecandidate;
+    Object.defineProperty(pc, 'onicecandidate', {
+        get() { return curOnIce; },
+        set(fn) {
+            curOnIce = function(event) {
+                if (state.forceIPv6 && event && event.candidate && event.candidate.candidate) {
+                    const parts = event.candidate.candidate.split(' ');
+                    if (parts.length > 4 && !parts[4].includes(':')) {
+                        return; // Drop local IPv4 candidate from transmission
+                    }
+                }
+                if (fn) return fn.apply(this, arguments);
+            };
+        },
+        configurable: true
+    });
 }
 
 function handleCall(call, isOutgoing = false) {
@@ -2306,6 +2357,21 @@ async function toggleEC() {
         updateECUI();
         showInfoBanner("Hardware echo cancellation not supported by browser.");
     }
+}
+
+function updateIPv6UI() {
+    const btn = document.getElementById('btn-ipv6-toggle');
+    if (btn) {
+        btn.innerText = `IPv6 Only: ${state.forceIPv6 ? 'On' : 'Off'}`;
+        btn.className = state.forceIPv6 ? 'toggle-btn is-active' : 'toggle-btn';
+    }
+}
+
+function toggleIPv6Mode() {
+    state.forceIPv6 = !state.forceIPv6;
+    try { localStorage.setItem('audiolink_force_ipv6', state.forceIPv6); } catch(e) {}
+    updateIPv6UI();
+    showInfoBanner(state.forceIPv6 ? "IPv6 Only enforced (calls require peer IPv6 support)." : "IPv6 Only disabled (Auto IPv4/IPv6).");
 }
 
 async function applyAudioConstraints() {
@@ -2722,10 +2788,16 @@ document.addEventListener('DOMContentLoaded', () => {
     checkUrlInviteParams();
     initGainSlider();
 
+    try {
+        state.forceIPv6 = localStorage.getItem('audiolink_force_ipv6') === 'true';
+    } catch(e) {}
+    updateIPv6UI();
+
     // Button event bindings
     document.getElementById('btn-init-uplink').addEventListener('click', initializePeer);
     document.getElementById('btn-copy-id').addEventListener('click', copyID);
     document.getElementById('btn-copy-link').addEventListener('click', copyInviteLink);
+    document.getElementById('btn-ipv6-toggle').addEventListener('click', toggleIPv6Mode);
     document.getElementById('btn-start-call').addEventListener('click', startCall);
     document.getElementById('btn-cancel-outgoing').addEventListener('click', () => cancelOutgoingCallUI(false));
     document.getElementById('btn-accept').addEventListener('click', acceptIncomingCall);
