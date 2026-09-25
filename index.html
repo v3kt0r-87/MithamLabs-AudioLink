@@ -1686,6 +1686,7 @@ async function acceptIncomingCall() {
     unlockAudioContext();
     if (!state.incomingCallObj) return;
     const call = state.incomingCallObj;
+    state.incomingCallObj = null;
     hideIncomingCallModal();
     updateStatusBadge('Connecting', 'var(--cyan)');
 
@@ -2151,7 +2152,7 @@ function handlePeerDisconnected(msg) {
     if (state.currentCall) {
         sendControlSignal(state.currentCall.peer, { type: 'end' });
     }
-    if (state.callStartTime > 0) {
+    if (state.callStartTime > 0 || msg === "Call ended." || msg === "Call ended by peer.") {
         playDisconnectTone();
         showInfoBanner(msg || "Call ended.");
     } else if (state.currentCall || state.outgoingTarget) {
@@ -2531,14 +2532,7 @@ function maskIP(ip) {
    CLEANUP & TEARDOWN
    ========================================================================= */
 function endCall() {
-    playDisconnectTone();
-    if (state.currentCall) {
-        const call = state.currentCall;
-        sendControlSignal(call.peer, { type: 'end' });
-        state.currentCall = null;
-        call.close();
-    }
-    cleanup();
+    handlePeerDisconnected("Call ended.");
 }
 
 function cleanup() {
@@ -2594,12 +2588,12 @@ function cleanup() {
     document.getElementById('local-ip').innerText = '---';
     document.getElementById('remote-ip').innerText = '---';
 
+    state.incomingCallObj = null;
     if (state.currentCall) {
         const c = state.currentCall;
         state.currentCall = null;
         try { c.close(); } catch(e) {}
     }
-    state.incomingCallObj = null;
     if (state.controlConn) {
         try { state.controlConn.close(); } catch(e) {}
         state.controlConn = null;
