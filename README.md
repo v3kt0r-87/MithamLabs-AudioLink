@@ -6,6 +6,20 @@ A lightweight, modern, privacy-hardened browser-based peer-to-peer voice calling
 
 ---
 
+## 🎮 The Origin Story (Why We Built This)
+
+Audiolink was created in **2026** under **MithamLabs** out of pure frustration. 
+
+During a period when Telegram was banned / heavily restricted in India, our voice calls kept constantly dropping in the middle of intense co-op gaming sessions (specifically playing ***Dying Light***). Having to repeatedly alt-tab mid-game to manually re-dial while fighting off volatiles was unbearable. 
+
+Heavy desktop voice apps like Discord or Steam either hogged precious RAM and CPU cycles or introduced severe routing latency spikes. We wanted a clean, uncompromising solution:
+1. **Zero Install & Zero Accounts:** Works instantly in any browser tab without installing software or registering phone numbers.
+2. **Direct Peer-to-Peer:** Streams directly between players via UDP without routing audio through intermediate servers.
+3. **Rock-Solid Connection:** Auto-reconnects cleanly, handles call glare politely, and never drops out unexpectedly.
+4. **Near-Zero System Overhead:** Pure CSS, zero heavy canvas/GPU shaders, and pure Web Audio API synthesis so your CPU and GPU stay 100% dedicated to gaming frame rates.
+
+---
+
 ## Key Highlights
 
 ### 🛡️ Privacy & Traffic Masking
@@ -25,6 +39,23 @@ A lightweight, modern, privacy-hardened browser-based peer-to-peer voice calling
 - **Live Connection Diagnostics:** Real-time sliding-window RTT latency, jitter, packet loss, and candidate connection route classification (`IPv6 Direct • CBR`, `P2P (STUN) • CBR`, `Relay (TURN)`).
 - **OLED Dark & Porcelain Light Themes:** Instant toggle with persistent local preference.
 - **Screen Wake Lock:** Prevents mobile and laptop screens from sleeping during active calls.
+
+---
+
+## ⚖️ Legal & Regulatory Compliance Disclaimer
+
+Audiolink is an open-source software implementation of standard W3C WebRTC specifications and IETF cryptographic protocols. Depending on your jurisdiction, local telecommunications laws and lawful interception mandates differ:
+
+### 🟢 Permitted / Fully Legal
+* **United States, Canada, European Union, United Kingdom, Japan, Australia:** Fully protected under freedom of speech, open-source software publication, and statutory privacy regulations (GDPR, ECHR). Open-source client-side cryptography is completely legal.
+* **India:** 100% legal for pure internet-to-internet browser calling. Indian Department of Telecommunications (DoT) regulations apply strictly to VoIP interconnected with the Public Switched Telephone Network (PSTN / telecom mobile numbers). Audiolink operates strictly over P2P IP without PSTN bridging.
+
+### 🔴 Restricted / Prohibited Jurisdictions
+* **United Arab Emirates (UAE) & Oman:** Unlicensed VoIP tools that are not explicitly authorized by state telecom authorities (e.g. TDRA / Etisalat / du / Omantel) are legally restricted. State firewalls actively block WebRTC/VoIP traffic, and bypassing these restrictions using unauthorized tools can carry statutory fines under local cybercrime laws.
+* **China, Russia, Iran:** National telecommunications regulations mandate that voice communication platforms provide state lawful interception backdoors (e.g. SORM, MIIT business licensing, real-name registration). Because Audiolink is serverless and end-to-end encrypted with zero backdoor capability, it is subject to state DPI firewall blocking.
+* **North Korea & Turkmenistan:** Total statutory prohibition on unauthorized encrypted communications and internet telephony.
+
+> **Disclaimer:** *This documentation provides technical and regulatory analysis for educational and architectural transparency only. It does not constitute formal legal counsel. Users are solely responsible for ensuring compliance with the communications and telecommunications laws of their respective countries.*
 
 ---
 
@@ -114,6 +145,15 @@ node --test tests/*.test.js
 - **Web Audio API** — Synthesized ringtones, call chimes, and live mic input metering.
 - **HTML5 & Vanilla CSS3** — Fully responsive dual-theme design supporting mobile viewports down to 360px.
 - **Vanilla ES Modules** — Zero bundlers, zero external dependencies.
+
+---
+
+## 👥 Authors & Contributors
+
+Audiolink is created and maintained under **MithamLabs** by its two contributors:
+
+* **Shankar Vallabhan** — [@v3kt0r-87](https://github.com/v3kt0r-87) (MithamLabs)
+* **Priyanshu Pandey** — [@LordShenron](https://github.com/LordShenron) (MithamLabs)
 
 ---
 
