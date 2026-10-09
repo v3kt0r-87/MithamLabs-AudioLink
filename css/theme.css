@@ -1,0 +1,121 @@
+/* =========================================================================
+   THEME DESIGN TOKENS & SYSTEM
+   Ultra-low resource usage design: Pitch OLED Black & Clean Porcelain Light
+   ========================================================================= */
+
+:root {
+    /* DARK THEME (Default): Pitch OLED Black with Slate Precision */
+    --bg-base: #000000;
+    --bg-card: #090b10;
+    --bg-card-subtle: #11141c;
+    --bg-card-hover: #161a24;
+    --border: #1e232f;
+    --border-hover: #2e3547;
+    --border-focus: #3b82f6;
+    
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-tertiary: #475569;
+    
+    --brand: #10b981;
+    --brand-bg: rgba(16, 185, 129, 0.1);
+    --brand-border: rgba(16, 185, 129, 0.3);
+    
+    --cyan: #06b6d4;
+    --cyan-bg: rgba(6, 182, 212, 0.1);
+    
+    --danger: #f43f5e;
+    --danger-bg: rgba(244, 63, 94, 0.12);
+    --danger-border: rgba(244, 63, 94, 0.3);
+    
+    --warning: #f59e0b;
+    --shadow-card: 0 8px 32px -4px rgba(0, 0, 0, 0.7);
+    --shadow-btn: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --input-bg: #050608;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-full: 9999px;
+}
+
+[data-theme="light"] {
+    /* LIGHT THEME: Clean Crisp Porcelain & Deep Slate */
+    --bg-base: #f8fafc;
+    --bg-card: #ffffff;
+    --bg-card-subtle: #f1f5f9;
+    --bg-card-hover: #e2e8f0;
+    --border: #e2e8f0;
+    --border-hover: #cbd5e1;
+    --border-focus: #2563eb;
+    
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --text-tertiary: #cbd5e1;
+    
+    --brand: #059669;
+    --brand-bg: rgba(5, 150, 105, 0.08);
+    --brand-border: rgba(5, 150, 105, 0.25);
+    
+    --cyan: #0284c7;
+    --cyan-bg: rgba(2, 132, 199, 0.08);
+    
+    --danger: #e11d48;
+    --danger-bg: rgba(225, 29, 72, 0.08);
+    --danger-border: rgba(225, 29, 72, 0.25);
+    
+    --warning: #d97706;
+    --shadow-card: 0 10px 25px -5px rgba(15, 23, 42, 0.06), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+    --shadow-btn: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --input-bg: #ffffff;
+}
+
+/* FLOATING THEME TOGGLE (Responsive for Desktop & Smartphones) */
+.theme-switch-btn {
+    position: fixed;
+    top: 18px;
+    top: max(18px, env(safe-area-inset-top, 18px));
+    right: 18px;
+    right: max(18px, env(safe-area-inset-right, 18px));
+    z-index: 100;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    padding: 8px 14px;
+    border-radius: var(--radius-full);
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    user-select: none;
+    transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.theme-switch-btn:hover {
+    border-color: var(--border-hover);
+    background: var(--bg-card-subtle);
+    transform: translateY(-1px);
+}
+
+.theme-switch-btn:active {
+    transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+    body {
+        padding-top: 64px;
+    }
+    .theme-switch-btn {
+        top: 12px;
+        top: max(12px, env(safe-area-inset-top, 12px));
+        right: 12px;
+        right: max(12px, env(safe-area-inset-right, 12px));
+        padding: 6px 11px;
+        font-size: 11px;
+    }
+}

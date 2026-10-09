@@ -1,6 +1,6 @@
 # Audiolink by MithamLabs — Zero Latency P2P Voice
 
-A lightweight, modern, low-resource browser-based peer-to-peer voice calling application built with WebRTC and PeerJS. Runs as a completely standalone, single-file web app with zero dependencies and no build step required.
+A lightweight, modern, low-resource browser-based peer-to-peer voice calling application built with WebRTC and PeerJS. Runs as a completely standalone, zero-build web app using native browser ES modules with zero external dependencies.
 
 🌐 **[Launch Live App](https://v3kt0r-87.github.io/MithamLabs-AudioLink/)**
 
@@ -8,7 +8,7 @@ A lightweight, modern, low-resource browser-based peer-to-peer voice calling app
 
 ## Highlights
 
-- **Single-File Architecture:** The entire app lives inside [`index.html`](index.html). No Node.js, no bundlers, no build step.
+- **Modular Zero-Build Architecture:** Clean native browser ES modules with no bundlers, transpilers, or build steps required. Runs out of the box on GitHub Pages or any static host.
 - **Direct Peer-to-Peer Audio:** Audio streams directly between browsers using WebRTC and the Opus codec—no intermediate audio servers or voice logging.
 - **Ultra-Low Resource Footprint:** Pure CSS transitions, no canvas animations or heavy GPU filters, engineered for near-zero idle CPU, GPU, and RAM overhead during gaming or multitasking.
 - **Hardware Audio Processing:** In-app toggles for native Echo Cancellation (AEC) and Noise Suppression.
