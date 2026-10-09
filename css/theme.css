@@ -107,9 +107,6 @@
 }
 
 @media (max-width: 768px) {
-    body {
-        padding-top: 64px;
-    }
     .theme-switch-btn {
         top: 12px;
         top: max(12px, env(safe-area-inset-top, 12px));

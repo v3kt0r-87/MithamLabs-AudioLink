@@ -130,6 +130,7 @@ export class WebRTCSessionManager {
 
         this.incomingCallObj = call;
         this.activePeer = caller;
+        this.audio.startRing(true);
         this.fsm.transition(CallState.INCOMING_CALL, { caller });
 
         call.on('close', () => {
@@ -140,6 +141,11 @@ export class WebRTCSessionManager {
     }
 
     async acceptIncomingCall() {
+        this.audio.stopRing();
+        if (this.audio && typeof this.audio.unlock === 'function') {
+            this.audio.unlock();
+        }
+
         if (!this.incomingCallObj) return false;
         const call = this.incomingCallObj;
         this.incomingCallObj = null;
@@ -161,6 +167,7 @@ export class WebRTCSessionManager {
     }
 
     declineIncomingCall() {
+        this.audio.stopRing();
         if (this.incomingCallObj) {
             const caller = this.incomingCallObj.peer;
             this.signaling.sendControlSignal(caller, { type: 'decline' });

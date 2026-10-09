@@ -35,8 +35,14 @@
         <div id="incoming-caller-id" class="modal-user mono">CALLER</div>
         <div class="user-meta">Wants to establish direct P2P audio</div>
         <div style="display:flex; gap:10px; width:100%; margin-top:8px;">
-            <button id="btn-accept" class="btn-primary">Accept</button>
-            <button id="btn-decline" class="btn-danger">Decline</button>
+            <button id="btn-accept" class="btn-primary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                <span>Accept</span>
+            </button>
+            <button id="btn-decline" class="btn-danger">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <span>Decline</span>
+            </button>
         </div>
     </div>
 </div>
@@ -73,8 +79,8 @@
         <input type="text" id="username-input" class="input-field mono" placeholder="Create username (3-24 alphanumeric)" autocomplete="off" spellcheck="false" maxlength="24">
         <div id="setup-error" class="banner banner-danger"></div>
         <button id="btn-init-uplink" class="btn-primary">
-            <span>Initialize Uplink</span>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            <span id="btn-init-uplink-text">Initialize Uplink</span>
+            <svg id="btn-init-uplink-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </button>
     </section>
 
@@ -150,9 +156,8 @@
 
             <div class="room-center">
                 <div id="call-timer" class="call-timer-badge mono">00:00</div>
-                <div id="safety-words-card" class="safety-badge" title="End-to-End Cryptographic Safety Words">
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                    <span id="safety-words" class="mono">Verifying...</span>
+                <div style="display:flex; gap:4px; margin-top:4px;">
+                    <span class="status-dot"></span>
                 </div>
             </div>
 
@@ -160,6 +165,14 @@
                 <span class="user-badge mono">PEER</span>
                 <div class="user-name mono" id="remote-user-tag">---</div>
                 <div class="user-meta mono" id="remote-ip">---</div>
+            </div>
+        </div>
+
+        <!-- CRYPTOGRAPHIC VERIFICATION BADGE -->
+        <div class="safety-wrapper">
+            <div id="safety-words-card" class="safety-badge" title="End-to-End Cryptographic Safety Words">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span id="safety-words" class="mono">Verifying...</span>
             </div>
         </div>
 

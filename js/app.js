@@ -38,9 +38,11 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (_) {}
 
         const btnInit = document.getElementById('btn-init-uplink');
+        const btnInitText = document.getElementById('btn-init-uplink-text');
         if (btnInit) {
             btnInit.disabled = false;
-            btnInit.innerText = 'Initialize Uplink';
+            if (btnInitText) btnInitText.innerText = 'Initialize Uplink';
+            else btnInit.innerText = 'Initialize Uplink';
         }
 
         const myIdEl = document.getElementById('my-id');
@@ -65,9 +67,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     signaling.on('error', (err) => {
         const btnInit = document.getElementById('btn-init-uplink');
+        const btnInitText = document.getElementById('btn-init-uplink-text');
         if (btnInit) {
             btnInit.disabled = false;
-            btnInit.innerText = 'Initialize Uplink';
+            if (btnInitText) btnInitText.innerText = 'Initialize Uplink';
+            else btnInit.innerText = 'Initialize Uplink';
         }
 
         let errorMsg = `System Error: ${err.type}`;

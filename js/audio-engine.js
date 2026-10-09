@@ -57,16 +57,20 @@ export class AudioEngine {
         audioIds.forEach(id => {
             const el = document.getElementById(id);
             if (el && !el.dataset.unlocked) {
-                el.dataset.unlocked = 'true';
+                const origVolume = el.volume;
+                el.volume = 0.001;
                 const p = el.play();
                 if (p !== undefined) {
                     p.then(() => {
+                        el.dataset.unlocked = 'true';
                         if (!el.dataset.playing) {
                             el.pause();
                             el.currentTime = 0;
                         }
+                        el.volume = origVolume || 1.0;
                     }).catch(() => {
                         delete el.dataset.unlocked;
+                        el.volume = origVolume || 1.0;
                     });
                 }
             }
@@ -89,7 +93,11 @@ export class AudioEngine {
 
     playSound(name, fallbackElId, synthFallback) {
         const ctx = this.getAudioContext();
-        if (ctx && this.soundBuffers[name]) {
+        if (ctx && ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+        }
+
+        if (ctx && ctx.state === 'running' && this.soundBuffers[name]) {
             try {
                 const src = ctx.createBufferSource();
                 src.buffer = this.soundBuffers[name];
@@ -101,6 +109,7 @@ export class AudioEngine {
 
         const el = fallbackElId ? document.getElementById(fallbackElId) : null;
         if (el) {
+            el.volume = 1.0;
             el.currentTime = 0;
             const p = el.play();
             if (p !== undefined) {
@@ -117,9 +126,20 @@ export class AudioEngine {
     startRing(isIncoming = true) {
         this.stopRing();
         const key = isIncoming ? 'ring' : 'dial';
-        const ctx = this.getAudioContext();
+        const elId = isIncoming ? 'ring-audio' : 'dial-audio';
+        const el = document.getElementById(elId);
 
-        if (ctx && this.soundBuffers[key]) {
+        if (isIncoming && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            try { navigator.vibrate([300, 200, 300, 200, 500]); } catch (_) {}
+        }
+
+        const ctx = this.getAudioContext();
+        if (ctx && ctx.state === 'suspended') {
+            ctx.resume().catch(() => {});
+        }
+
+        // 1. If Web Audio Context is running and buffer is ready, use high-precision Web Audio buffer
+        if (ctx && ctx.state === 'running' && this.soundBuffers[key]) {
             try {
                 const src = ctx.createBufferSource();
                 src.buffer = this.soundBuffers[key];
@@ -131,10 +151,11 @@ export class AudioEngine {
             } catch (_) {}
         }
 
-        const elId = isIncoming ? 'ring-audio' : 'dial-audio';
-        const el = document.getElementById(elId);
+        // 2. Fallback to native HTML5 <audio> element (works on mobile when AudioContext is suspended)
         if (el) {
             el.dataset.playing = 'true';
+            el.volume = 1.0;
+            el.muted = false;
             el.currentTime = 0;
             const p = el.play();
             if (p !== undefined) {
@@ -146,10 +167,15 @@ export class AudioEngine {
             }
         }
 
+        // 3. Fallback to synthesized Web Audio oscillator tone
         this.playSynthRing(isIncoming);
     }
 
     stopRing() {
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            try { navigator.vibrate(0); } catch (_) {}
+        }
+
         if (this.ringSource) {
             try {
                 this.ringSource.stop();
@@ -174,10 +200,17 @@ export class AudioEngine {
     }
 
     playSynthRing(isIncoming = true) {
+        if (this.ringInterval) {
+            clearInterval(this.ringInterval);
+            this.ringInterval = null;
+        }
         const cfg = isIncoming ? CONFIG.SYNTH_AUDIO.INCOMING_RING : CONFIG.SYNTH_AUDIO.OUTGOING_DIAL;
         const playTone = () => {
             const ctx = this.getAudioContext();
             if (!ctx) return;
+            if (ctx.state === 'suspended') {
+                ctx.resume().catch(() => {});
+            }
             try {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();

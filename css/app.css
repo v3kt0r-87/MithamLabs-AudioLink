@@ -34,6 +34,16 @@ body {
     transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+@media (max-width: 768px) {
+    body {
+        align-items: flex-start;
+        padding-top: max(68px, calc(env(safe-area-inset-top, 0px) + 54px));
+        padding-bottom: max(24px, env(safe-area-inset-bottom, 24px));
+        padding-left: max(12px, env(safe-area-inset-left, 12px));
+        padding-right: max(12px, env(safe-area-inset-right, 12px));
+    }
+}
+
 /* MAIN APP CONTAINER */
 .app-container {
     width: 100%;
@@ -154,6 +164,12 @@ body {
 
 .input-field::placeholder {
     color: var(--text-muted);
+}
+
+@media (max-width: 480px) {
+    .input-field {
+        font-size: 16px; /* Prevents auto-zoom on iOS Safari */
+    }
 }
 
 /* BUTTONS */
@@ -472,6 +488,13 @@ body {
 }
 
 /* E2E CRYPTOGRAPHIC SAFETY VERIFICATION BADGE */
+.safety-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: -8px;
+    margin-bottom: 18px;
+}
+
 .safety-badge {
     display: inline-flex;
     align-items: center;
@@ -479,18 +502,24 @@ body {
     background: var(--bg-card);
     border: 1px solid var(--border);
     border-radius: var(--radius-full);
-    padding: 4px 10px;
+    padding: 4px 12px;
     font-size: 11px;
     color: var(--text-muted);
     user-select: none;
     transition: all 0.2s ease;
     cursor: default;
+    max-width: 100%;
+}
+
+.safety-badge:hover {
+    border-color: var(--border-hover);
 }
 
 .safety-badge.is-verified {
     border-color: var(--brand-border);
     background: var(--brand-bg);
     color: var(--brand);
+    cursor: pointer;
 }
 
 .safety-badge.is-verified svg {

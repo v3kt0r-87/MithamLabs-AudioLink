@@ -28,6 +28,7 @@ test('index.html contains all critical DOM elements and IDs required by Audiolin
         'username-input',
         'setup-error',
         'btn-init-uplink',
+        'btn-init-uplink-text',
         'call-controls',
         'my-id',
         'btn-copy-id',

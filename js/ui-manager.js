@@ -78,14 +78,17 @@ export class UIManager {
                 this.updateStatusBadge('Standby', 'var(--text-muted)');
                 this.stopCallTimer();
                 this.releaseWakeLock();
+                this.clearIncomingNotification();
                 break;
 
             case CallState.INITIALIZING:
                 this.updateStatusBadge('Connecting', 'var(--warning)');
                 const btnInit = document.getElementById('btn-init-uplink');
+                const btnInitText = document.getElementById('btn-init-uplink-text');
                 if (btnInit) {
                     btnInit.disabled = true;
-                    btnInit.innerText = 'Connecting Uplink...';
+                    if (btnInitText) btnInitText.innerText = 'Connecting Uplink...';
+                    else btnInit.innerText = 'Connecting Uplink...';
                 }
                 break;
 
@@ -99,6 +102,7 @@ export class UIManager {
                 this.updateStatusBadge('Online', 'var(--brand)');
                 this.stopCallTimer();
                 this.clearTitleAlert();
+                this.clearIncomingNotification();
                 this.releaseWakeLock();
 
                 if (payload.bannerMsg) {
@@ -148,6 +152,7 @@ export class UIManager {
             case CallState.CONNECTING:
                 if (incomingModal) incomingModal.style.display = 'none';
                 this.clearTitleAlert();
+                this.clearIncomingNotification();
                 this.updateStatusBadge('Connecting', 'var(--cyan)');
                 break;
 
@@ -159,6 +164,7 @@ export class UIManager {
                 if (incomingModal) incomingModal.style.display = 'none';
                 this.resetCallButton();
                 this.clearTitleAlert();
+                this.clearIncomingNotification();
                 this.updateStatusBadge('Active', 'var(--brand)');
 
                 const remoteUser = document.getElementById('remote-user-tag');
@@ -262,6 +268,13 @@ export class UIManager {
         }
     }
 
+    clearIncomingNotification() {
+        if (this.incomingNotification) {
+            try { this.incomingNotification.close(); } catch (_) {}
+            this.incomingNotification = null;
+        }
+    }
+
     async acquireWakeLock() {
         if ('wakeLock' in navigator) {
             try {
@@ -306,18 +319,52 @@ export class UIManager {
     }
 
     copyToClipboard(text, btnElement, successMsg) {
-        if (!text || text === '---' || !navigator.clipboard) return;
-        navigator.clipboard.writeText(text).then(() => {
-            const originalContent = btnElement.innerHTML;
-            btnElement.innerHTML = `<span>${successMsg}</span>`;
-            btnElement.style.color = 'var(--brand)';
-            btnElement.style.borderColor = 'var(--brand)';
-            setTimeout(() => {
-                btnElement.innerHTML = originalContent;
-                btnElement.style.color = '';
-                btnElement.style.borderColor = '';
-            }, 2000);
-        }).catch(() => {});
+        if (!text || text === '---' || !btnElement) return;
+
+        const finish = () => {
+            const span = btnElement.querySelector('span');
+            if (span) {
+                const origText = span.innerText;
+                span.innerText = successMsg;
+                btnElement.style.color = 'var(--brand)';
+                btnElement.style.borderColor = 'var(--brand)';
+                setTimeout(() => {
+                    span.innerText = origText;
+                    btnElement.style.color = '';
+                    btnElement.style.borderColor = '';
+                }, 2000);
+            } else {
+                const origContent = btnElement.innerHTML;
+                btnElement.innerHTML = `<span>${successMsg}</span>`;
+                btnElement.style.color = 'var(--brand)';
+                btnElement.style.borderColor = 'var(--brand)';
+                setTimeout(() => {
+                    btnElement.innerHTML = origContent;
+                    btnElement.style.color = '';
+                    btnElement.style.borderColor = '';
+                }, 2000);
+            }
+        };
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(finish).catch(() => this._fallbackCopy(text, finish));
+        } else {
+            this._fallbackCopy(text, finish);
+        }
+    }
+
+    _fallbackCopy(text, cb) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            if (cb) cb();
+        } catch (_) {}
     }
 
     checkUrlInviteParams(onAutoCall) {
@@ -339,9 +386,12 @@ export class UIManager {
 
             const savedUser = localStorage.getItem('audiolink_username');
             if (savedUser) {
-                const btnInit = document.getElementById('btn-init-uplink');
-                if (btnInit) {
-                    btnInit.textContent = `Connect to ${cleanTarget} as "${savedUser}"`;
+                const btnInitText = document.getElementById('btn-init-uplink-text');
+                if (btnInitText) {
+                    btnInitText.textContent = `Connect to ${cleanTarget} as "${savedUser}"`;
+                } else {
+                    const btnInit = document.getElementById('btn-init-uplink');
+                    if (btnInit) btnInit.textContent = `Connect to ${cleanTarget} as "${savedUser}"`;
                 }
             }
 

@@ -82,6 +82,7 @@ class MockAudioEngine {
     stopMeter() {}
     stopLocalStream() {}
     acquireLocalStream() { return Promise.resolve(this.localStream); }
+    unlock() { return Promise.resolve(); }
 }
 
 class MockTelemetry {
@@ -155,4 +156,60 @@ test('Call Control Protocol: declines and cancellations update session cleanly',
     assert.equal(fsm.state, CallState.LOBBY);
     assert.equal(session.activePeer, null);
     assert.ok(audio.playedSounds.includes('failed'));
+});
+
+test('Incoming call triggers ringtone for receiver and stops when accepted or declined', async () => {
+    const fsm = new CallStateMachine();
+    const signaling = new MockSignaling('bob');
+    const audio = new MockAudioEngine();
+    const telemetry = new MockTelemetry();
+
+    const session = new WebRTCSessionManager({ fsm, signaling, audio, telemetry });
+    fsm.forceState(CallState.LOBBY);
+
+    const incomingCall = new MockMediaConnection('alice');
+    session._handleIncomingCallOffer(incomingCall);
+
+    assert.equal(fsm.state, CallState.INCOMING_CALL);
+    assert.equal(audio.ringState, 'incoming', 'Ringtone must play for receiver on incoming call');
+
+    await session.acceptIncomingCall();
+    assert.equal(audio.ringState, null, 'Ringtone must stop once call is accepted');
+
+    // Also test decline stops ringtone
+    fsm.forceState(CallState.LOBBY);
+    const incomingCall2 = new MockMediaConnection('charlie');
+    session._handleIncomingCallOffer(incomingCall2);
+    assert.equal(audio.ringState, 'incoming');
+    session.declineIncomingCall();
+    assert.equal(audio.ringState, null, 'Ringtone must stop once call is declined');
+
+    // Also test caller cancelling stops ringtone
+    fsm.forceState(CallState.LOBBY);
+    const incomingCall3 = new MockMediaConnection('dave');
+    session._handleIncomingCallOffer(incomingCall3);
+    assert.equal(audio.ringState, 'incoming');
+    // Dave sends cancel signal before receiver answers
+    signaling.emit('incomingControl', { fromPeer: 'dave', data: { type: 'cancel' } });
+    assert.equal(audio.ringState, null, 'Ringtone must stop when caller cancels');
+    assert.equal(fsm.state, CallState.LOBBY);
+});
+
+test('Incoming call is rejected with busy when user is not in LOBBY', () => {
+    const fsm = new CallStateMachine();
+    const signaling = new MockSignaling('bob');
+    const audio = new MockAudioEngine();
+    const telemetry = new MockTelemetry();
+
+    const session = new WebRTCSessionManager({ fsm, signaling, audio, telemetry });
+    fsm.forceState(CallState.STANDBY);
+
+    const incomingCall = new MockMediaConnection('alice');
+    session._handleIncomingCallOffer(incomingCall);
+
+    assert.equal(fsm.state, CallState.STANDBY);
+    assert.equal(audio.ringState, null, 'Ringtone must not play when user is not in lobby');
+    assert.ok(incomingCall.closed, 'Call must be closed immediately');
+    const busySignal = signaling.sentControlSignals.find(s => s.target === 'alice' && s.payload.type === 'busy');
+    assert.ok(busySignal, 'Must send busy signal to caller');
 });
