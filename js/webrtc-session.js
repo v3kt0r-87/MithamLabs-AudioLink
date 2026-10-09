@@ -5,7 +5,7 @@
 
 import { CONFIG } from './config.js';
 import { CallState } from './fsm.js';
-import { isIPv6Candidate } from './telemetry.js';
+import { isIPv6Candidate, enforceCBRInSdp } from './telemetry.js';
 
 export class WebRTCSessionManager {
     constructor({ fsm, signaling, audio, telemetry }) {
@@ -19,12 +19,14 @@ export class WebRTCSessionManager {
         this.activePeer = null;
         this.callStartTime = 0;
         this.forceIPv6 = false;
+        this.cbrMasking = CONFIG.CBR_MASKING?.ENABLED ?? true;
 
         this.callTimeoutTimer = null;
         this.iceDisconnectTimer = null;
 
         this._bindSignalingEvents();
         this._bindAudioEvents();
+        this._installWebRTCHooks();
     }
 
     _bindSignalingEvents() {
@@ -50,6 +52,59 @@ export class WebRTCSessionManager {
 
         this.audio.onMicFailed = () => {
             this.terminateCall('Microphone disconnected.');
+        };
+    }
+
+    _installWebRTCHooks() {
+        if (typeof window === 'undefined' || !window.RTCPeerConnection) return;
+        const self = this;
+        const proto = window.RTCPeerConnection.prototype;
+        if (proto.__audiolink_cbr_installed) return;
+        proto.__audiolink_cbr_installed = true;
+
+        const bitrate = CONFIG.CBR_MASKING?.BITRATE_BPS || 32000;
+
+        const makeDesc = (type, sdp) => {
+            if (typeof RTCSessionDescription !== 'undefined') {
+                try {
+                    return new RTCSessionDescription({ type, sdp });
+                } catch (_) {}
+            }
+            return { type, sdp };
+        };
+
+        const origCreateOffer = proto.createOffer;
+        proto.createOffer = async function(...args) {
+            const offer = await origCreateOffer.apply(this, args);
+            if (offer && offer.sdp && self.cbrMasking) {
+                return makeDesc(offer.type, enforceCBRInSdp(offer.sdp, bitrate));
+            }
+            return offer;
+        };
+
+        const origCreateAnswer = proto.createAnswer;
+        proto.createAnswer = async function(...args) {
+            const answer = await origCreateAnswer.apply(this, args);
+            if (answer && answer.sdp && self.cbrMasking) {
+                return makeDesc(answer.type, enforceCBRInSdp(answer.sdp, bitrate));
+            }
+            return answer;
+        };
+
+        const origSetLocal = proto.setLocalDescription;
+        proto.setLocalDescription = function(desc, ...args) {
+            if (desc && desc.sdp && self.cbrMasking) {
+                desc = makeDesc(desc.type, enforceCBRInSdp(desc.sdp, bitrate));
+            }
+            return origSetLocal.apply(this, [desc, ...args]);
+        };
+
+        const origSetRemote = proto.setRemoteDescription;
+        proto.setRemoteDescription = function(desc, ...args) {
+            if (desc && desc.sdp && self.cbrMasking) {
+                desc = makeDesc(desc.type, enforceCBRInSdp(desc.sdp, bitrate));
+            }
+            return origSetRemote.apply(this, [desc, ...args]);
         };
     }
 
@@ -203,6 +258,7 @@ export class WebRTCSessionManager {
         const pc = call.peerConnection;
         if (pc) {
             this._applyCandidateFilter(pc);
+            this._applySenderCBR(pc);
 
             pc.oniceconnectionstatechange = () => {
                 const iceState = pc.iceConnectionState;
@@ -254,6 +310,7 @@ export class WebRTCSessionManager {
             );
 
             if (pc) {
+                this._applySenderCBR(pc);
                 this.telemetry.start(pc, (metrics) => this._onTelemetryUpdate(metrics));
             }
         });
@@ -395,6 +452,30 @@ export class WebRTCSessionManager {
         this.forceIPv6 = enabled;
     }
 
+    setCBRMasking(enabled) {
+        this.cbrMasking = enabled;
+        if (this.currentCall && this.currentCall.peerConnection) {
+            this._applySenderCBR(this.currentCall.peerConnection);
+        }
+    }
+
+    async _applySenderCBR(pc) {
+        if (!this.cbrMasking || !pc || !pc.getSenders) return;
+        const bitrate = CONFIG.CBR_MASKING?.BITRATE_BPS || 32000;
+        try {
+            const senders = pc.getSenders();
+            for (const sender of senders) {
+                if (sender.track && sender.track.kind === 'audio') {
+                    const params = sender.getParameters ? sender.getParameters() : null;
+                    if (params && params.encodings && params.encodings.length > 0) {
+                        params.encodings[0].maxBitrate = bitrate;
+                        await sender.setParameters(params);
+                    }
+                }
+            }
+        } catch (_) {}
+    }
+
     _onMeterUpdate(data) {
         const meterFill = document.getElementById('meter-fill');
         const dbLabel = document.getElementById('mic-db-level');
@@ -431,7 +512,10 @@ export class WebRTCSessionManager {
         setVal('lat-avg', metrics.latency);
         setVal('jitter', metrics.jitter);
         setVal('loss', metrics.loss);
-        setVal('network-type', metrics.networkRoute);
+        const routeLabel = (this.cbrMasking && metrics.networkRoute && metrics.networkRoute !== '---')
+            ? `${metrics.networkRoute} • CBR`
+            : metrics.networkRoute;
+        setVal('network-type', routeLabel);
         setVal('local-ip', metrics.localIP);
         setVal('remote-ip', metrics.remoteIP);
 

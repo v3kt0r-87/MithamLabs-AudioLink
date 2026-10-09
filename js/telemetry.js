@@ -25,6 +25,37 @@ export function isIPv6Candidate(candidateStr) {
     return parts.length > 4 && parts[4].includes(':');
 }
 
+/**
+ * Enforces RFC 7587 Constant Bitrate (CBR) and disables DTX on Opus audio codec in SDP.
+ * Transforms Variable Bitrate (VBR) into a constant packet stream to defeat DPI traffic analysis.
+ */
+export function enforceCBRInSdp(sdp, bitrate = 32000) {
+    if (!sdp || typeof sdp !== 'string') return sdp;
+    const opusMatch = sdp.match(/a=rtpmap:(\d+)\s+opus\/48000/i);
+    if (!opusMatch) return sdp;
+    const pt = opusMatch[1];
+
+    const fmtpRegex = new RegExp(`a=fmtp:${pt}\\s+([^\\r\\n]+)`, 'i');
+    if (fmtpRegex.test(sdp)) {
+        return sdp.replace(fmtpRegex, (match, existingParams) => {
+            let params = existingParams
+                .split(';')
+                .map(p => p.trim())
+                .filter(p => !p.startsWith('cbr=') && !p.startsWith('usedtx=') && !p.startsWith('maxaveragebitrate='));
+            params.push('cbr=1');
+            params.push('usedtx=0');
+            params.push(`maxaveragebitrate=${bitrate}`);
+            return `a=fmtp:${pt} ${params.join(';')}`;
+        });
+    } else {
+        const lineEnding = sdp.includes('\r\n') ? '\r\n' : '\n';
+        return sdp.replace(
+            new RegExp(`(a=rtpmap:${pt}\\s+opus\\/48000(?:\\/[^\\r\\n]*)?)`, 'i'),
+            `$1${lineEnding}a=fmtp:${pt} minptime=10;cbr=1;usedtx=0;maxaveragebitrate=${bitrate}`
+        );
+    }
+}
+
 export function classifyNetworkRoute(candidateType, address) {
     if (!candidateType && !address) return '---';
     if (candidateType === 'relay') return 'Relay (TURN)';

@@ -111,9 +111,12 @@
             <button id="btn-cancel-outgoing" class="btn-danger" style="padding:8px 14px; font-size:12px;">Cancel Call</button>
         </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
             <label for="peer-id" class="section-label" style="margin-bottom:0;">Call a Peer</label>
-            <button type="button" id="btn-ipv6-toggle" class="toggle-btn" style="padding:3px 8px; font-size:11px;" title="Enforce IPv6 Only (no IPv4 fallback)">IPv6 Only: Off</button>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <button type="button" id="btn-cbr-toggle" class="toggle-btn is-active" style="padding:3px 8px; font-size:11px;" title="Constant Bitrate Masking: locks audio packet size and disables silence gaps to defeat ISP DPI traffic analysis">CBR Mask: On</button>
+                <button type="button" id="btn-ipv6-toggle" class="toggle-btn" style="padding:3px 8px; font-size:11px;" title="Enforce IPv6 Only (no IPv4 fallback)">IPv6 Only: Off</button>
+            </div>
         </div>
         <input type="text" id="peer-id" class="input-field mono" placeholder="Enter target username to call" autocomplete="off" spellcheck="false" maxlength="24">
         <div id="call-error" class="banner banner-danger"></div>

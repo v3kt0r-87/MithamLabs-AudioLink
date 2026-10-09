@@ -442,4 +442,12 @@ export class UIManager {
             btn.className = isOn ? 'toggle-btn is-active' : 'toggle-btn';
         }
     }
+
+    updateCBRUI(isOn) {
+        const btn = document.getElementById('btn-cbr-toggle');
+        if (btn) {
+            btn.innerText = `CBR Mask: ${isOn ? 'On' : 'Off'}`;
+            btn.className = isOn ? 'toggle-btn is-active' : 'toggle-btn';
+        }
+    }
 }

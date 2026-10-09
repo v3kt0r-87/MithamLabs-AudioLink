@@ -51,5 +51,10 @@ export const CONFIG = {
         MUTE_BEEP: { mutedFreq: 320, unmutedFreq: 640 }
     },
 
-    USERNAME_REGEX: /^[a-zA-Z0-9_-]{3,24}$/
+    USERNAME_REGEX: /^[a-zA-Z0-9_-]{3,24}$/,
+
+    CBR_MASKING: {
+        ENABLED: true,
+        BITRATE_BPS: 32000
+    }
 };

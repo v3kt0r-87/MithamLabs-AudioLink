@@ -165,7 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 8. IPv6 Toggle Preference
+    // 8. IPv6 & CBR Privacy Preferences
     try {
         const savedIpv6 = localStorage.getItem('audiolink_force_ipv6') === 'true';
         session.setForceIPv6(savedIpv6);
@@ -180,6 +180,24 @@ document.addEventListener('DOMContentLoaded', () => {
             try { localStorage.setItem('audiolink_force_ipv6', next); } catch (_) {}
             ui.updateIPv6UI(next);
             ui.showInfoBanner(next ? 'IPv6 Only enforced (peer requires IPv6).' : 'IPv6 Only disabled (Auto IPv4/IPv6).');
+        });
+    }
+
+    try {
+        const savedCbr = localStorage.getItem('audiolink_cbr_masking');
+        const cbrEnabled = savedCbr !== null ? savedCbr === 'true' : true;
+        session.setCBRMasking(cbrEnabled);
+        ui.updateCBRUI(cbrEnabled);
+    } catch (_) {}
+
+    const btnCbr = document.getElementById('btn-cbr-toggle');
+    if (btnCbr) {
+        btnCbr.addEventListener('click', () => {
+            const next = !session.cbrMasking;
+            session.setCBRMasking(next);
+            try { localStorage.setItem('audiolink_cbr_masking', next); } catch (_) {}
+            ui.updateCBRUI(next);
+            ui.showInfoBanner(next ? 'CBR Masking enabled: constant packet stream protects against DPI.' : 'CBR Masking disabled (Standard VBR/DTX).');
         });
     }
 

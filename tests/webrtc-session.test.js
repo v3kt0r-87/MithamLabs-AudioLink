@@ -213,3 +213,19 @@ test('Incoming call is rejected with busy when user is not in LOBBY', () => {
     const busySignal = signaling.sentControlSignals.find(s => s.target === 'alice' && s.payload.type === 'busy');
     assert.ok(busySignal, 'Must send busy signal to caller');
 });
+
+test('WebRTCSessionManager controls CBR masking state', () => {
+    const fsm = new CallStateMachine();
+    const signaling = new MockSignaling('alice');
+    const audio = new MockAudioEngine();
+    const telemetry = new MockTelemetry();
+
+    const session = new WebRTCSessionManager({ fsm, signaling, audio, telemetry });
+    assert.equal(session.cbrMasking, true);
+
+    session.setCBRMasking(false);
+    assert.equal(session.cbrMasking, false);
+
+    session.setCBRMasking(true);
+    assert.equal(session.cbrMasking, true);
+});

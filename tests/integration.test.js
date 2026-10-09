@@ -38,6 +38,7 @@ test('index.html contains all critical DOM elements and IDs required by Audiolin
         'outgoing-target-name',
         'outgoing-status-subtext',
         'btn-cancel-outgoing',
+        'btn-cbr-toggle',
         'btn-ipv6-toggle',
         'peer-id',
         'call-error',

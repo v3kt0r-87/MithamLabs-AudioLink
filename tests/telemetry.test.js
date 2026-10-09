@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { maskIP, classifyNetworkRoute, TelemetryMonitor } from '../js/telemetry.js';
+import { maskIP, classifyNetworkRoute, TelemetryMonitor, enforceCBRInSdp } from '../js/telemetry.js';
 
 test('maskIP correctly obfuscates IPv4, IPv6, and mDNS', () => {
     assert.equal(maskIP('192.168.1.100'), '192.168.*.*');
@@ -88,4 +88,54 @@ test('TelemetryMonitor extracts metrics from RTCStatsReport map', async () => {
     assert.equal(metrics.networkRoute, 'P2P (STUN)');
     assert.equal(metrics.localIP, '152.58.*.*');
     assert.equal(metrics.remoteIP, '192.168.*.*');
+});
+
+test('enforceCBRInSdp modifies existing fmtp line to force cbr=1, usedtx=0, and maxaveragebitrate', () => {
+    const sdpWithFmtp = [
+        'v=0',
+        'm=audio 9 UDP/TLS/RTP/SAVPF 111 126',
+        'a=rtpmap:111 opus/48000/2',
+        'a=fmtp:111 minptime=10;useinbandfec=1',
+        'a=rtpmap:126 telephone-event/8000'
+    ].join('\r\n');
+
+    const result = enforceCBRInSdp(sdpWithFmtp, 32000);
+    assert.match(result, /a=fmtp:111 minptime=10;useinbandfec=1;cbr=1;usedtx=0;maxaveragebitrate=32000/);
+
+    // Overwrites existing cbr and usedtx if present
+    const sdpWithOldParams = [
+        'v=0',
+        'm=audio 9 UDP/TLS/RTP/SAVPF 111',
+        'a=rtpmap:111 opus/48000/2',
+        'a=fmtp:111 minptime=10;cbr=0;usedtx=1;maxaveragebitrate=64000'
+    ].join('\r\n');
+
+    const result2 = enforceCBRInSdp(sdpWithOldParams, 32000);
+    assert.match(result2, /a=fmtp:111 minptime=10;cbr=1;usedtx=0;maxaveragebitrate=32000/);
+    assert.doesNotMatch(result2, /cbr=0/);
+    assert.doesNotMatch(result2, /usedtx=1/);
+});
+
+test('enforceCBRInSdp injects fmtp line when opus rtpmap exists without fmtp', () => {
+    const sdpWithoutFmtp = [
+        'v=0',
+        'm=audio 9 UDP/TLS/RTP/SAVPF 96',
+        'a=rtpmap:96 opus/48000/2',
+        'a=mid:0'
+    ].join('\r\n');
+
+    const result = enforceCBRInSdp(sdpWithoutFmtp, 32000);
+    assert.match(result, /a=fmtp:96 minptime=10;cbr=1;usedtx=0;maxaveragebitrate=32000/);
+});
+
+test('enforceCBRInSdp leaves SDP untouched when opus is not present or sdp is invalid', () => {
+    const sdpNoOpus = [
+        'v=0',
+        'm=audio 9 UDP/TLS/RTP/SAVPF 0',
+        'a=rtpmap:0 PCMU/8000'
+    ].join('\r\n');
+
+    assert.equal(enforceCBRInSdp(sdpNoOpus), sdpNoOpus);
+    assert.equal(enforceCBRInSdp(null), null);
+    assert.equal(enforceCBRInSdp(''), '');
 });
